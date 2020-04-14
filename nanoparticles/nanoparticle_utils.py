@@ -141,7 +141,7 @@ def cluster_add_adsorbates(atoms, adsorbate, sites_list, distance,
     for site_num in sites_list:
 
         site_pos = np.zeros(3)
-        if isinstance(site_num, int):
+        if type(site_num) in (int, np.int64):
             if first_element == 1:
                 site_num -= 1
             site_pos += atoms[site_num].position
