@@ -13,16 +13,16 @@ import copy as cp
 import matplotlib.pyplot as plt
 from ase import Atoms
 from ase.build import bulk
-from nanoparticle_units import *
-from nanoparticle_utils import (decahedron_grid       ,
-                                e_relax_from_bond_ols ,
-                                cluster_add_adsorbates,
-                                get_neighbor_atoms_fcc)
-from active_sites_shells import (get_surface_shell   , 
-                                 get_fcc_active_shell,
-                                 count_active_sites  , 
-                                 plot_kmc_grid       )
-from nanoparticle_cython import calculate_neighbors, DecahedronShape
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_utils import (decahedron_grid       ,
+                                              e_relax_from_bond_ols ,
+                                              cluster_add_adsorbates)
+from nanoparticles.active_sites_shells import (get_surface_shell   , 
+                                               get_fcc_active_shell,
+                                               count_active_sites  , 
+                                               plot_kmc_grid       )
+from nanoparticles.nanoparticle_cython import (calculate_neighbors, 
+                                               DecahedronShape    )
 
 ################################################################################
 # MEASURE TIME START
@@ -80,11 +80,11 @@ m_ang_e_bind  = +4.1877E-02 # [-]
 alpha_cov     = +3.0340E+02 # [eV/Ang^2]
 beta_cov      = +3.3144E+00 # [-]
 
-y_zero_deltaf_harmonic = -8.2582E-01 # [eV/K]
-m_ang_deltaf_harmonic  = +2.3378E-02 # [-]
+y_zero_deltaf_harmonic = -7.999E-01 # [eV/K]
+m_ang_deltaf_harmonic  = +2.348E-02 # [-]
 
-y_zero_deltaf_hindered = -8.6042E-01 # [eV/K]
-m_ang_deltaf_hindered  = +2.6737E-02 # [-]
+y_zero_deltaf_hindered = -8.690E-01 # [eV/K]
+m_ang_deltaf_hindered  = +2.770E-02 # [-]
 
 from phases import gas
 
@@ -116,42 +116,7 @@ elif thermo_model == 'IdealThermo':
 # BINDING ENERGY CORRECTION FUNCTIONS
 ################################################################################
 
-def f_e_bind_corr_n_coord_8(coverage):
-
-    delta_e_bind = +0.050 # [eV]
-
-    if 0.50 < coverage <= 1.00:
-        corr = delta_e_bind*(1.-np.cos((coverage-0.50)/(1.00-0.50)*np.pi))/2.
-    else:
-        corr = 0.
-
-    delta_f = -0.04 # [eV]
-
-    corr += delta_f
-
-    return corr
-
-def f_e_bind_corr_n_coord_9(coverage):
-
-    delta_e_bind = +0.210 # [eV]
-
-    if 0.33 < coverage <= 0.75:
-        corr = delta_e_bind*(1.-np.cos((coverage-0.33)/(0.75-0.33)*np.pi))/2.
-    elif 0.75 < coverage < 1.00:
-        corr = delta_e_bind*(0.5+np.cos((coverage-0.75)/(1.00-0.75)*np.pi)/2.)
-    else:
-        corr = 0.
-
-    delta_f = +0.10 # [eV]
-
-    corr += delta_f
-
-    return corr
-
 f_e_bind_corr = [lambda coverage: 0.]*13
-
-f_e_bind_corr[8] = f_e_bind_corr_n_coord_8
-f_e_bind_corr[9] = f_e_bind_corr_n_coord_9
 
 ################################################################################
 # BULK
@@ -165,7 +130,7 @@ bulk_atoms = decahedron_grid(element          = element         ,
                              heigth           = 1               )
 
 positions = bulk_atoms.get_positions()
-cell = bulk_atoms.cell
+cell = np.array(bulk_atoms.cell)
 
 interact_len = np.sqrt(2*lattice_constant)*1.2
 
@@ -180,7 +145,6 @@ neighbors = calculate_neighbors(positions     = positions   ,
 layers_max = np.array([6]*5)
 layers_min = np.array([4]*5)
 
-#planes_miller = np.array([[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]])
 planes_miller = np.array([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]])
 
 n_coord_min = 6
@@ -214,8 +178,6 @@ atoms.set_pbc(True)
 atoms.set_cell(cell)
 
 atoms.center(vacuum = 10./2.)
-
-atoms.write('pw.xsf')
 
 ################################################################################
 # PRINT COORDINATION NUMBERS AND FORMATION ENERGY
@@ -318,17 +280,20 @@ if adsorption is True:
 # COUNT ACTIVE SITES
 ################################################################################
 
-count_sites = False
+count_sites = True
 
-plot_kmc_grid_3D = True
+plot_kmc_grid_3D = False
 
-specify_supp_int = True
+plot_top_distrib = False
+
+specify_supp_int = False
 specify_n_coord  = ('top',)
 check_duplicates = False
+specify_facets   = False
 multiple_facets  = True
 
 half_plot   = False
-facet_color = True
+facet_color = False
 
 n_coord_max = 12
 
@@ -347,6 +312,7 @@ if count_sites is True:
     active_sites = get_fcc_active_shell(surface          = surface         ,
                                         specify_supp_int = specify_supp_int,
                                         specify_n_coord  = specify_n_coord ,
+                                        specify_facets   = specify_facets  ,
                                         check_duplicates = check_duplicates,
                                         multiple_facets  = multiple_facets )
     
@@ -359,6 +325,23 @@ if count_sites is True:
                       plot_type    = '3D'        , 
                       half_plot    = half_plot   ,
                       facet_color  = facet_color )
+
+    if plot_top_distrib is True:
+
+        fig = plt.figure(1)
+        fig.set_size_inches(10, 10)
+
+        if specify_facets is True:
+
+            plot_top_distribution(active_sites_dict = active_sites_dict,
+                                  n_atoms_tot       = particle.n_atoms ,
+                                  percentual        = True             )
+
+        else:
+            
+            plot_sites_distribution(active_sites_dict = active_sites_dict,
+                                    n_atoms_tot       = particle.n_atoms ,
+                                    percentual        = True             )
 
 ################################################################################
 # ADD ADSORBATES
@@ -388,8 +371,6 @@ if adsorption is True:
 else:
     coverage = 0.
 
-coverage = 0.10
-
 top_list_original = np.copy(top_list)
 
 if random_adsorption is True:
@@ -398,7 +379,6 @@ if random_adsorption is True:
 n_ads = int(coverage*len(top_list))
 
 sites_list = top_list[:n_ads]
-sites_list[:int(n_ads/2)] = top_list_original[:int(n_ads/2)]
 
 coverage = len(sites_list)/len(top_list)
 print('nanoparticle coverage = {:.2f} ML\n'.format(coverage))
@@ -410,12 +390,7 @@ atoms = cluster_add_adsorbates(atoms      = atoms     ,
 
 atoms.center(vacuum = 10./2.)
 
-atoms.write('pw.xsf')
-atoms.write('pw.xyz')
-
-multiplicity = particle.get_multiplicity(multip_bulk = 4)
-
-print('multiplicity = ', multiplicity)
+atoms.write('dec.xsf')
 
 ################################################################################
 # MEASURE TIME END

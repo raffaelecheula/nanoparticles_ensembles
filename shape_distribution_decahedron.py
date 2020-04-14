@@ -10,9 +10,11 @@ try: import cPickle as pickle
 except: import _pickle as pickle
 import numpy as np
 from ase.build import bulk
-from nanoparticle_units import *
-from nanoparticle_utils import decahedron_grid, e_relax_from_bond_ols
-from nanoparticle_cython import calculate_neighbors, DecahedronShape
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_utils import (decahedron_grid      ,
+                                              e_relax_from_bond_ols)
+from nanoparticles.nanoparticle_cython import (calculate_neighbors,
+                                               DecahedronShape    )
 
 ################################################################################
 # RUN
@@ -38,8 +40,8 @@ dirname = 'dec'
 n_max = 1500 # [atom]
 step  = 10   # [atom]
 
-min_diff_n = 1     # [atom]
-min_diff_e = 0.005 # [eV/atom]
+min_diff_n = 1  # [atom]
+min_diff_e = 0. # [eV/atom]
 
 if not os.path.isdir(dirname):
     os.mkdir(dirname)
@@ -88,9 +90,9 @@ e_relax_list = e_relax_from_bond_ols(e_coh_bulk = e_coh_bulk,
 
 heigth = 1
 
-size_vector = [5+i for i in range(15)]
+size_vector = [5+i for i in range(2)]
 
-hd_diff = 7
+hd_diff = 4
 
 min_diff = 2
 
@@ -116,7 +118,7 @@ for size in size_vector:
                             heigth           = heigth          )
 
     positions = atoms.get_positions()
-    cell = atoms.cell
+    cell = np.array(atoms.cell)
 
     neighbors = calculate_neighbors(positions     = positions   ,
                                     cell          = cell        ,

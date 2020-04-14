@@ -10,9 +10,11 @@ try: import cPickle as pickle
 except: import _pickle as pickle
 import numpy as np
 from ase.build import bulk
-from nanoparticle_units import *
-from nanoparticle_utils import icosahedron_grid, e_relax_from_bond_ols
-from nanoparticle_cython import calculate_neighbors, IcosahedronShape
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_utils import (icosahedron_grid     ,
+                                              e_relax_from_bond_ols)
+from nanoparticles.nanoparticle_cython import (calculate_neighbors,
+                                               IcosahedronShape   )
 
 ################################################################################
 # RUN
@@ -38,8 +40,8 @@ dirname = 'ico'
 n_max = 1500 # [atom]
 step  = 10   # [atom]
 
-min_diff_n = 1     # [atom]
-min_diff_e = 0.005 # [eV/atom]
+min_diff_n = 1  # [atom]
+min_diff_e = 0. # [eV/atom]
 
 if not os.path.isdir(dirname):
     os.mkdir(dirname)
@@ -86,11 +88,9 @@ e_relax_list = e_relax_from_bond_ols(e_coh_bulk = e_coh_bulk,
 
 size = 18
 
-size_vector = range(2, 17)
-
 size_vector = range(2, 4)
 
-n_coord_min_vect = [0, 7]
+n_coord_min_vect = [0]
 
 n_coord_min_iter_vect = range(12)
 
@@ -107,7 +107,7 @@ atoms = icosahedron_grid(element          = element         ,
                          size             = size            )
 
 positions = atoms.get_positions()
-cell = atoms.cell
+cell = np.array(atoms.cell)
 
 neighbors = calculate_neighbors(positions     = positions   ,
                                 cell          = cell        ,

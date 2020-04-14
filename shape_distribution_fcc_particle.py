@@ -11,9 +11,10 @@ except: import _pickle as pickle
 import numpy as np
 from collections import OrderedDict
 from ase.build import bulk
-from nanoparticle_units import *
-from nanoparticle_utils import e_relax_from_bond_ols
-from nanoparticle_cython import calculate_neighbors, FccParticleShape
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_utils import e_relax_from_bond_ols
+from nanoparticles.nanoparticle_cython import (calculate_neighbors,
+                                               FccParticleShape   )
 
 ################################################################################
 # RUN
@@ -39,8 +40,8 @@ dirname = 'fcc'
 n_max = 1500 # [atom]
 step  = 10   # [atom]
 
-min_diff_n = 1     # [atom]
-min_diff_e = 0.005 # [eV/atom]
+min_diff_n = 1  # [atom]
+min_diff_e = 0. # [eV/atom]
 
 if not os.path.isdir(dirname):
     os.mkdir(dirname)
@@ -88,7 +89,7 @@ e_relax_list = e_relax_from_bond_ols(e_coh_bulk = e_coh_bulk,
 ################################################################################
 
 layers_min_100 = 2
-layers_max_100 = 4
+layers_max_100 = 8
 
 atoms = bulk(element, bulk_type, a = lattice_constant, cubic = True)
 
@@ -99,7 +100,7 @@ size = [layers_max_100+layers_vac]*3
 atoms *= size
 
 positions = atoms.get_positions()
-cell = atoms.cell
+cell = np.array(atoms.cell)
 
 interact_len = np.sqrt(2*lattice_constant)*1.2
 
@@ -131,8 +132,7 @@ if max_spherical is True:
 else:
     d_max_tot = 2.*plane_dist_100*layers_max_100
 
-scale_vect = [(1.0, 1.0), (0.9, 1.0), (1.0, 0.9), (0.8, 1.0), (1.0, 0.8)]
-#scale_vect = [(0.7, 1.0), (1.0, 0.7), (0.6, 1.0), (1.0, 0.6)]
+scale_vect = [(1.0, 1.0)]
 
 n_coord_min = 0
 
@@ -168,6 +168,8 @@ for hkl in step_dict:
     plane_dist[hkl] = plane_dist_100/denom*step_dict[hkl]
 
 count = 0
+
+miller_symmetry = True
 
 print('\n  N particles   N processes\n')
 
@@ -230,7 +232,8 @@ for j in range(layers_min_100, layers_max_100):
                                        n_coord_min      = n_coord_min       ,
                                        interact_len     = interact_len      ,
                                        e_coh_bulk       = e_coh_bulk        ,
-                                       e_relax_list     = e_relax_list      )
+                                       e_relax_list     = e_relax_list      ,
+                                       miller_symmetry  = miller_symmetry   )
 
                         try:
                             particle.get_shape()

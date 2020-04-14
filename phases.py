@@ -7,7 +7,7 @@
 from __future__ import absolute_import, division, print_function
 import numpy as np
 import cantera as ct
-from nanoparticle_units import *
+from nanoparticles.nanoparticle_units import *
 
 ################################################################################
 # GAS
