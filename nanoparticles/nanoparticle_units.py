@@ -1,5 +1,12 @@
 ################################################################################
-# Raffaele Cheula, LCCP, Politecnico di Milano, raffaele.cheula@polimi.it
+# Raffaele Cheula*[a][b], Matteo Maestri**[a], Giannis Mpourmpakis***[b]
+# [a] Politecnico di Milano, [b] University of Pittsburgh
+# * raffaele.cheula@polimi.it
+# ** matteo.maestri@polimi.it
+# *** gmpourmp@pitt.edu
+# Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles 
+# Under Reaction Conditions
+# ACS Catalysis 2020
 ################################################################################
 
 from __future__ import absolute_import, division, print_function
