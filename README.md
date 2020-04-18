@@ -6,12 +6,12 @@ A Python/Cython library useful to:
 * Calculate the probabilities of the nanoparticles with a Boltzmann distribution and analyze the effect of the presence of metastable shapes in thermal equilibrium with the ground state shape on the catalytic activity.
 
 ## **Requirements:**
-* **NumPy**
-* **SciPy**
-* **Matplotlib**
-* **ASE (Atomic Simulation Environment)**
-* **Cantera**
-* **Cython**
+* NumPy
+* SciPy
+* Matplotlib
+* ASE (Atomic Simulation Environment)
+* Cantera
+* Cython
 
 ## **Installation:**
 Navigate to the folder `nanoparticles` and type in a terminal: `bash cython_cmd`
