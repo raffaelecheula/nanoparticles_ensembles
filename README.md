@@ -1,6 +1,9 @@
 # nanoparticles_ensembles
 
-A Python/Cython library to produce ensembles of nanoparticles (containing fcc single crystals, decahedra and icosahedra shapes) with arbitrary size and low to high symmetry, analyze their distribution of active sites and analyze the effect of the multiplifcity of nanoparticles shapes on the catalytic activity.
+A Python/Cython library useful to:
+* Produce ensembles of nanoparticles (containing fcc single crystals, decahedra and icosahedra shapes) with arbitrary size and low to high symmetry.
+* Calculate the distribution of active sites of the nanoparticles.
+* Calculate the probabilities of the nanoparticles with a Boltzmann distribution and analyze the effect of the presence of metastable shapes in thermal equilibrium with the ground state shape on the catalytic activity.
 
 ## **Requirements:**
 * **NumPy**
