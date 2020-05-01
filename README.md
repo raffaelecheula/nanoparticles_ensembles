@@ -20,4 +20,4 @@ To compile the Cython code, navigate to the folder `nanoparticles` and type in a
 * Raffaele Cheula (raffaele.cheula@polimi.it)
 
 ## Reference:
-R. Cheula, M. Maestri, G. Mpourmpakis, "Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles Under Reaction Conditions", ACS Catalysis, 2020, accepted article
+R. Cheula, M. Maestri, G. Mpourmpakis, "Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles Under Reaction Conditions", ACS Catalysis, 2020, DOI: 10.1021/acscatal.0c01005
