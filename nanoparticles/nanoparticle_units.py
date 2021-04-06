@@ -6,7 +6,7 @@
 # *** gmpourmp@pitt.edu
 # Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles 
 # Under Reaction Conditions
-# ACS Catalysis 2020
+# ACS Catalysis 2020, 10, 11, 6149–6158
 ################################################################################
 
 from __future__ import absolute_import, division, print_function

@@ -6,7 +6,7 @@
 # *** gmpourmp@pitt.edu
 # Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles 
 # Under Reaction Conditions
-# ACS Catalysis 2020
+# ACS Catalysis 2020, 10, 11, 6149–6158
 ################################################################################
 
 # PYTHON IMPORT
@@ -424,7 +424,7 @@ class FccParticleShape:
     def get_energy(self):
 
         cdef:
-            np.ndarray n_coord      = self.n_coord
+            int        n_atoms      = self.n_atoms
             np.ndarray n_coord_dist = self.n_coord_dist
             double     e_coh_bulk   = self.e_coh_bulk
             np.ndarray e_relax_list = self.e_relax_list
@@ -432,7 +432,6 @@ class FccParticleShape:
         cdef:
             int        n
             double     e_form_clean
-            int        n_atoms = len(n_coord)
             double     e_coh   = 0.
 
         for i in range(13):
@@ -748,7 +747,6 @@ class DecahedronShape:
             np.ndarray e_relax_list     = self.e_relax_list
             int        n_atoms          = self.n_atoms
             np.ndarray positions        = self.positions
-            np.ndarray n_coord          = self.n_coord
             np.ndarray n_coord_dist     = self.n_coord_dist
             np.ndarray layers_min       = self.layers_min
             np.ndarray layers_max       = self.layers_max
@@ -1035,7 +1033,6 @@ class IcosahedronShape:
             double     e_coh_bulk       = self.e_coh_bulk
             np.ndarray e_relax_list     = self.e_relax_list
             int        n_atoms          = self.n_atoms
-            np.ndarray n_coord          = self.n_coord
             np.ndarray n_coord_dist     = self.n_coord_dist
             np.ndarray layers           = self.layers
             float      e_twin           = self.e_twin
