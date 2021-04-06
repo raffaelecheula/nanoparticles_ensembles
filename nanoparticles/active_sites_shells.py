@@ -1,12 +1,5 @@
 ################################################################################
-# Raffaele Cheula*[a][b], Matteo Maestri**[a], Giannis Mpourmpakis***[b]
-# [a] Politecnico di Milano, [b] University of Pittsburgh
-# * raffaele.cheula@polimi.it
-# ** matteo.maestri@polimi.it
-# *** gmpourmp@pitt.edu
-# Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles 
-# Under Reaction Conditions
-# ACS Catalysis 2020
+# Raffaele Cheula, LCCP, Politecnico di Milano, raffaele.cheula@polimi.it
 ################################################################################
 
 from __future__ import absolute_import, division, print_function
@@ -22,6 +15,8 @@ from nanoparticle_utils import get_interact_len, get_neighbor_atoms
 ################################################################################
 # COLORS
 ################################################################################
+
+sites_names = ['top', 'brg', 'lbr', 'hcp', 'fcc', 'hol', 'lho', 'bho', 'tho']
 
 black  = np.array([  0/255,   0/255,   0/255])
 white  = np.array([255/255, 255/255, 255/255])
@@ -284,8 +279,8 @@ def get_surface_shell(element, positions, neighbors, indices, n_coord,
 
 def get_fcc_active_shell(surface          ,
                          specify_n_coord  = []   ,
-                         specify_supp_int = True ,
-                         specify_facets   = True ,
+                         specify_supp_int = False,
+                         specify_facets   = False,
                          check_duplicates = False,
                          multiple_facets  = False):
 
@@ -616,10 +611,13 @@ def get_fcc_active_shell(surface          ,
 
             f = surface[fi]
             
-            gi = [ gi for gi in surface[c.neighbors[0]].neigh_zero
-                   if gi in surface[c.neighbors[1]].neigh_zero
-                   if gi in surface[c.neighbors[2]].neigh_zero
-                   if gi in surface[c.neighbors[3]].neigh_zero ][0]
+            try: 
+                gi = [ gi for gi in surface[c.neighbors[0]].neigh_zero
+                           if gi in surface[c.neighbors[1]].neigh_zero
+                           if gi in surface[c.neighbors[2]].neigh_zero
+                           if gi in surface[c.neighbors[3]].neigh_zero ][0]
+            except:
+                continue
             
             mi, ni = [ i for i in c.neighbors[:4] if i not in a.neighbors[:2] ]
             
@@ -816,9 +814,10 @@ def get_fcc_active_shell(surface          ,
 
     if check_duplicates is True:
 
-        for a in active_sites:
+        for a in [ a for a in active_sites if a.deleted is False ]:
 
-            for b in [ b for b in active_sites if b.index > a.index ]:
+            for b in [ b for b in active_sites if b.deleted is False 
+                       if b.index > a.index ]:
 
                 if np.allclose(a.position, b.position) is True:
 
