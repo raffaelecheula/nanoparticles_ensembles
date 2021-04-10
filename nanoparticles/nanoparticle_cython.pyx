@@ -58,6 +58,7 @@ cdef:
                                         [1., 3.*sqrt(5.-2*sqrt(5.)), 0.]])
 
 cdef:
+    int        i
     float      norm
     float      pt            = 0.5+sqrt(5.)/2.
     np.ndarray octa_vert     = np.array([[+pt, +0., +1.],
@@ -86,84 +87,201 @@ for i in range(len(octa_vert)):
     octa_norm[i] = octa_vert[i]/norm
 
 ################################################################################
-# CALCULATE NEIGHBORS
+# PARTICLE SHAPE
 ################################################################################
 
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def calculate_neighbors(np.ndarray positions   ,
-                        np.ndarray cell        ,
-                        double     interact_len):
+class ParticleShape:
 
-    cdef:
-        int        i, j, k, p, q, c
-        list       box_num
-        double     distance
-        np.ndarray cell_diag = sum(cell)
-        int        n_atoms   = len(positions)
-        int        n_max     = 108
-        int        max_coord = 12
-        np.ndarray dist_vect = np.zeros(3, dtype = float)
-        np.ndarray box_len   = np.zeros(3, dtype = float)
-        np.ndarray neighbors = np.zeros((n_atoms, max_coord), dtype = int)
-        np.ndarray n_coord   = np.zeros(n_atoms, dtype = int)
+    # ----------------------------------------------------------------------
+    #  TO ASE ATOMS
+    # ----------------------------------------------------------------------
 
-    box_num = [int(np.ceil(cell_diag[0]/interact_len)),
-               int(np.ceil(cell_diag[1]/interact_len)),
-               int(np.ceil(cell_diag[2]/interact_len))]
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def to_ase_atoms(self, 
+                     str        symbol):
+
+        from ase import Atoms
     
-    box_len = np.divide(cell_diag, box_num)
+        cdef:
+            str        symbols = symbol+str(self.n_atoms)
     
-    cdef:
-        np.ndarray i_arrays = np.zeros((n_atoms, 3), dtype = int)
-        np.ndarray i_matrix = np.zeros(box_num+[n_max], dtype = int)
-        np.ndarray i_count  = np.zeros(box_num, dtype = int)
+        atoms = Atoms(symbols   = symbols       ,
+                      positions = self.positions)
     
-    for i in range(len(i_matrix)):
-        i_matrix[i] = -1
+        return atoms
+
+    # ----------------------------------------------------------------------
+    #  REMOVE ATOMS
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def remove_atoms(self, 
+                     int        n_iterations  ,
+                     int        remove_groups = False):
+
+        positions = particle_remove_atoms(self,
+                                          n_iterations  = n_iterations ,
+                                          remove_groups = remove_groups)
+
+        return positions
+
+    # ----------------------------------------------------------------------
+    #  GET MULTIPLICITY
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_multiplicity(self,
+                         int        multip_bulk):
     
-    for p in range(n_atoms):
-        i = int(np.floor(positions[p][0]/box_len[0]+1e-6))
-        j = int(np.floor(positions[p][1]/box_len[1]+1e-6))
-        k = int(np.floor(positions[p][2]/box_len[2]+1e-6))
-        i_arrays[p] = np.array([i,j,k])
-        for ii in (i-1, i, i+1):
-            for jj in (j-1, j, j+1):
-                for kk in (k-1, k, k+1):
-                    if (0 <= ii < box_num[0] and
-                        0 <= jj < box_num[1] and
-                        0 <= kk < box_num[2]):
-                        c = int(i_count[ii,jj,kk])
-                        i_matrix[ii,jj,kk,c] = p
-                        i_count[ii,jj,kk] += 1
+        multiplicity = particle_multiplicity(self, multip_bulk = multip_bulk)
+    
+        return multiplicity
 
-    for i in range(n_atoms):
-        for j in range(max_coord):
-            neighbors[i,j] = -1
+    # ----------------------------------------------------------------------
+    #  GET ENERGY
+    # ----------------------------------------------------------------------
 
-    for p in range(n_atoms):
-        i = int(i_arrays[p][0])
-        j = int(i_arrays[p][1])
-        k = int(i_arrays[p][2])
-        for q in i_matrix[i,j,k]:
-            if q >= 0 and q != p:
-                dist_vect = positions[p]-positions[q]
-                distance = sqrt(pow(dist_vect[0],2)+
-                                pow(dist_vect[1],2)+
-                                pow(dist_vect[2],2))
-                if distance < interact_len:
-                    c = int(n_coord[p])
-                    neighbors[p,c] = q
-                    n_coord[p] += 1
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_energy(self):
 
-    return neighbors
+        cdef:
+            int        n_atoms      = self.n_atoms
+            np.ndarray n_coord_dist = self.n_coord_dist
+            double     e_coh_bulk   = self.e_coh_bulk
+            np.ndarray e_relax_list = self.e_relax_list
+
+        cdef:
+            int        i
+            double     e_form_clean, v_atom, e_strain
+            double     e_coh = 0.
+
+        for i in range(13):
+            e_coh += n_coord_dist[i]*e_coh_bulk*np.sqrt(i)/np.sqrt(12)
+            e_coh += n_coord_dist[i]*e_relax_list[i]
+
+        if self.particle_type in ('decahedron', 'icosahedron'):
+
+            v_atom = 1./4.*self.lattice_constant**3
+            
+            e_strain = self.k_strain*self.shear_modulus*v_atom*self.n_atoms
+            
+            e_coh += e_strain
+            
+            e_coh += self.n_twin*self.e_twin
+
+        e_form_clean = e_coh-e_coh_bulk*n_atoms
+
+        self.e_form_clean = e_form_clean
+        self.e_spec_clean = e_form_clean/n_atoms
+        self.e_form       = e_form_clean
+        self.e_spec       = e_form_clean/n_atoms
+
+        return e_form_clean
+
+    # ----------------------------------------------------------------------
+    #  GET ENERGY WITH ADS
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_energy_with_ads(self,
+                            float      bond_len     ,
+                            float      y_zero_e_bind,
+                            float      m_ang_e_bind ,
+                            float      alpha_cov    ,
+                            float      beta_cov     ,
+                            float      temperature  ,
+                            float      delta_mu_ads ,
+                            list       f_e_bind_corr,
+                            str        entropy_model,
+                            int        averag_e_bind,
+                            str        e_form_denom ):
+
+        cdef:
+            float      area_surf
+            float      e_form_ads
+
+        area_surf = get_surface_area(self,
+                                     bond_len = bond_len)
+
+        e_form_ads = get_e_form_with_ads(self,
+                                         y_zero_e_bind = y_zero_e_bind,
+                                         m_ang_e_bind  = m_ang_e_bind ,
+                                         alpha_cov     = alpha_cov    ,
+                                         beta_cov      = beta_cov     ,
+                                         area_surf     = area_surf    ,
+                                         temperature   = temperature  ,
+                                         delta_mu_ads  = delta_mu_ads ,
+                                         f_e_bind_corr = f_e_bind_corr,
+                                         entropy_model = entropy_model,
+                                         averag_e_bind = averag_e_bind,
+                                         e_form_denom  = e_form_denom )
+
+        return e_form_ads
+
+    # ----------------------------------------------------------------------
+    #  GET ACTIVE SITES
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_active_sites(self):
+
+        from nanoparticle_active_sites import (get_surface_shell     ,
+                                               get_active_sites_shell)
+
+        surface = get_surface_shell(positions    = self.positions,
+                                    neighbors    = self.neighbors, 
+                                    indices      = self.indices  , 
+                                    n_coord      = self.n_coord  ,
+                                    supp_contact = None          ,
+                                    n_coord_max  = 12            )
+        
+        active_sites = get_active_sites_shell(surface          = surface,
+                                              specify_n_coord  = True   ,
+                                              specify_supp_int = False  ,
+                                              specify_facets   = False  ,
+                                              check_duplicates = False  ,
+                                              multiple_facets  = False  )
+
+        self.active_sites = active_sites
+
+        return active_sites
+
+    # ----------------------------------------------------------------------
+    #  GET ACTIVE SITES DICT
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_active_sites_dict(self):
+
+        from nanoparticle_active_sites import count_active_sites
+
+        active_sites_dict = count_active_sites(
+                                            active_sites = self.active_sites,
+                                            with_tags    = True             )
+
+        self.active_sites_dict = active_sites_dict
+
+        return active_sites_dict
 
 ################################################################################
 # FCC PARTICLE SHAPE
 ################################################################################
 
-class FccParticleShape:
+class FccParticleShape(ParticleShape):
 
     def __init__(self,
                  np.ndarray positions       ,
@@ -173,11 +291,11 @@ class FccParticleShape:
                  np.ndarray miller_indices  ,
                  np.ndarray planes_distances,
                  np.ndarray e_relax_list    ,
-                 double     scale_one       , 
-                 double     scale_two       , 
+                 float      scale_one       , 
+                 float      scale_two       , 
                  int        n_coord_min     ,
-                 double     interact_len    , 
-                 double     e_coh_bulk      ,
+                 float      interact_len    , 
+                 float      e_coh_bulk      ,
                  int        miller_symmetry ):
 
         self.positions        = positions
@@ -211,10 +329,10 @@ class FccParticleShape:
             np.ndarray translation      = self.translation
             np.ndarray miller_indices   = self.miller_indices
             np.ndarray planes_distances = self.planes_distances
-            double     scale_one        = self.scale_one
-            double     scale_two        = self.scale_two
+            float      scale_one        = self.scale_one
+            float      scale_two        = self.scale_two
             int        n_coord_min      = self.n_coord_min
-            double     interact_len     = self.interact_len
+            float      interact_len     = self.interact_len
             int        miller_symmetry  = self.miller_symmetry
 
         cdef:
@@ -334,7 +452,7 @@ class FccParticleShape:
             positions[p] += cell_trans
 
         cdef:
-            double     dispersion
+            float      dispersion
             int        n_atoms      = len(positions)
             np.ndarray n_coord      = np.zeros(n_atoms, dtype = int)
             np.ndarray n_coord_dist = np.zeros(13, dtype = int)
@@ -383,117 +501,11 @@ class FccParticleShape:
 
         return positions
 
-    # ----------------------------------------------------------------------
-    #  REMOVE ATOMS
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def remove_atoms(self, 
-                     int        n_iterations  ,
-                     int        remove_groups = False):
-
-        positions = particle_remove_atoms(self,
-                                          n_iterations  = n_iterations ,
-                                          remove_groups = remove_groups)
-
-        return positions
-
-    # ----------------------------------------------------------------------
-    #  GET MULTIPLICITY
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def get_multiplicity(self,
-                         int        multip_bulk):
-    
-        multiplicity = particle_multiplicity(self, multip_bulk = multip_bulk)
-    
-        return multiplicity
-
-    # ----------------------------------------------------------------------
-    #  GET ENERGY
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def get_energy(self):
-
-        cdef:
-            int        n_atoms      = self.n_atoms
-            np.ndarray n_coord_dist = self.n_coord_dist
-            double     e_coh_bulk   = self.e_coh_bulk
-            np.ndarray e_relax_list = self.e_relax_list
-
-        cdef:
-            int        n
-            double     e_form_clean
-            double     e_coh   = 0.
-
-        for i in range(13):
-            e_coh += n_coord_dist[i]*e_coh_bulk*np.sqrt(i)/np.sqrt(12)
-            e_coh += n_coord_dist[i]*e_relax_list[i]
-
-        e_form_clean = e_coh-e_coh_bulk*n_atoms
-
-        self.e_form_clean = e_form_clean
-        self.e_spec_clean = e_form_clean/n_atoms
-        self.e_form       = e_form_clean
-        self.e_spec       = e_form_clean/n_atoms
-
-        return e_form_clean
-
-    # ----------------------------------------------------------------------
-    #  GET ENERGY WITH ADS
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def get_energy_with_ads(self,
-                            double     bond_len     ,
-                            double     y_zero_e_bind,
-                            double     m_ang_e_bind ,
-                            double     alpha_cov    ,
-                            double     beta_cov     ,
-                            double     temperature  ,
-                            double     delta_mu_ads ,
-                            list       f_e_bind_corr,
-                            str        entropy_model,
-                            int        averag_e_bind,
-                            str        e_form_denom ):
-
-        cdef:
-            double     area_surf
-            double     e_form_ads
-
-        area_surf = get_surface_area(self,
-                                     bond_len = bond_len)
-
-        e_form_ads = get_e_form_with_ads(self,
-                                         y_zero_e_bind = y_zero_e_bind,
-                                         m_ang_e_bind  = m_ang_e_bind ,
-                                         alpha_cov     = alpha_cov    ,
-                                         beta_cov      = beta_cov     ,
-                                         area_surf     = area_surf    ,
-                                         temperature   = temperature  ,
-                                         delta_mu_ads  = delta_mu_ads ,
-                                         f_e_bind_corr = f_e_bind_corr,
-                                         entropy_model = entropy_model,
-                                         averag_e_bind = averag_e_bind,
-                                         e_form_denom  = e_form_denom )
-
-        return e_form_ads
-
 ################################################################################
 # DECAHEDRON SHAPE
 ################################################################################
 
-class DecahedronShape:
+class DecahedronShape(ParticleShape):
 
     def __init__(self,
                  np.ndarray positions       ,
@@ -534,8 +546,8 @@ class DecahedronShape:
                 self.layers_min[i] = self.layers_max[i]
 
         cdef:
-            double     heigth_min = 1e9
-            double     heigth_max = 0.
+            float      heigth_min = 1e9
+            float      heigth_max = 0.
 
         for i in range(len(positions)):
 
@@ -649,7 +661,7 @@ class DecahedronShape:
                 positions[p][:2] = np.dot(positions[p][:2], deca_rot_mat)
 
         cdef:
-            double     dispersion
+            float      dispersion
             int        n_atoms      = len(positions)
             np.ndarray n_coord      = np.zeros(n_atoms, dtype = int)
             np.ndarray n_coord_dist = np.zeros(13, dtype = int)
@@ -699,82 +711,27 @@ class DecahedronShape:
         self.n_coord_dist = n_coord_dist
         self.dispersion   = dispersion
 
-        return positions
-
-    # ----------------------------------------------------------------------
-    #  REMOVE ATOMS
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def remove_atoms(self, 
-                     int        n_iterations  ,
-                     int        remove_groups = False):
-
-        positions = particle_remove_atoms(self,
-                                          n_iterations  = n_iterations ,
-                                          remove_groups = remove_groups)
+        self.get_n_twin()
 
         return positions
 
     # ----------------------------------------------------------------------
-    #  GET MULTIPLICITY
+    #  GET N TWIN
     # ----------------------------------------------------------------------
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def get_multiplicity(self,
-                         int        multip_bulk):
-    
-        multiplicity = particle_multiplicity(self, multip_bulk = multip_bulk)
-    
-        return multiplicity
-
-    # ----------------------------------------------------------------------
-    #  GET ENERGY
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def get_energy(self):
+    def get_n_twin(self):
 
         cdef:
-            double     lattice_constant = self.lattice_constant
-            double     e_coh_bulk       = self.e_coh_bulk
-            np.ndarray e_relax_list     = self.e_relax_list
-            int        n_atoms          = self.n_atoms
-            np.ndarray positions        = self.positions
-            np.ndarray n_coord_dist     = self.n_coord_dist
-            np.ndarray layers_min       = self.layers_min
-            np.ndarray layers_max       = self.layers_max
-            int        layers_hole      = self.layers_hole
-            float      e_twin           = self.e_twin
-            float      shear_modulus    = self.shear_modulus
-            float      k_strain         = self.k_strain
-            int        layers_z         = self.layers_z
+            np.ndarray layers_min  = self.layers_min
+            int        layers_hole = self.layers_hole
+            int        layers_z    = self.layers_z
 
         cdef:
-            int        n
-            double     sqrt_n_coord
-            double     e_form_clean
-            double     v_atom
-            double     e_strain
-            int        layers_i
-            double     e_coh      = 0.
-            int        n_twin     = 0
-
-        for i in range(13):
-            e_coh += n_coord_dist[i]*e_coh_bulk*np.sqrt(i)/np.sqrt(12)
-            e_coh += n_coord_dist[i]*e_relax_list[i]
-
-        v_atom = 1./4.*lattice_constant**3
-
-        e_strain = k_strain*shear_modulus*v_atom*n_atoms
-
-        e_coh += e_strain
+            int        i, j
+            int        n_twin = 0
 
         for i in range(5):
             for j in range(layers_z-layers_min[i], layers_z+1):
@@ -782,65 +739,15 @@ class DecahedronShape:
             for j in range(layers_hole+1):
                 n_twin -= 2*j
 
-        e_coh += n_twin*e_twin
+        self.n_twin = n_twin
 
-        e_form_clean = e_coh-e_coh_bulk*n_atoms
-
-        self.n_twin       = n_twin
-        self.e_form_clean = e_form_clean
-        self.e_spec_clean = e_form_clean/n_atoms
-        self.e_form       = e_form_clean
-        self.e_spec       = e_form_clean/n_atoms
-
-        return e_form_clean
-
-    # ----------------------------------------------------------------------
-    #  GET ENERGY WITH ADS
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def get_energy_with_ads(self,
-                            double     bond_len     ,
-                            double     y_zero_e_bind,
-                            double     m_ang_e_bind ,
-                            double     alpha_cov    ,
-                            double     beta_cov     ,
-                            double     temperature  ,
-                            double     delta_mu_ads ,
-                            list       f_e_bind_corr,
-                            str        entropy_model,
-                            int        averag_e_bind,
-                            str        e_form_denom ):
-
-        cdef:
-            double     area_surf
-            double     e_form_ads
-
-        area_surf = get_surface_area(self,
-                                     bond_len = bond_len)
-
-        e_form_ads = get_e_form_with_ads(self,
-                                         y_zero_e_bind = y_zero_e_bind,
-                                         m_ang_e_bind  = m_ang_e_bind ,
-                                         alpha_cov     = alpha_cov    ,
-                                         beta_cov      = beta_cov     ,
-                                         area_surf     = area_surf    ,
-                                         temperature   = temperature  ,
-                                         delta_mu_ads  = delta_mu_ads ,
-                                         f_e_bind_corr = f_e_bind_corr,
-                                         entropy_model = entropy_model,
-                                         averag_e_bind = averag_e_bind,
-                                         e_form_denom  = e_form_denom )
-
-        return e_form_ads
+        return n_twin
 
 ################################################################################
 # ICOSAHEDRON SHAPE
 ################################################################################
 
-class IcosahedronShape:
+class IcosahedronShape(ParticleShape):
 
     def __init__(self,
                  np.ndarray positions       ,
@@ -926,7 +833,7 @@ class IcosahedronShape:
             indices   = np.delete(indices, del_indices, axis = 0)
 
         cdef:
-            double     dispersion
+            float      dispersion
             int        iteration
             float      distance_max, distance_min, dis
             int        n_atoms      = len(positions)
@@ -986,135 +893,107 @@ class IcosahedronShape:
         self.n_coord_dist = n_coord_dist
         self.dispersion   = dispersion
 
-        return positions
-
-    # ----------------------------------------------------------------------
-    #  REMOVE ATOMS
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def remove_atoms(self, 
-                     int        n_iterations  ,
-                     int        remove_groups = False):
-
-        positions = particle_remove_atoms(self,
-                                          n_iterations  = n_iterations ,
-                                          remove_groups = remove_groups)
+        self.get_n_twin()
 
         return positions
 
     # ----------------------------------------------------------------------
-    #  GET MULTIPLICITY
+    #  GET N TWIN
     # ----------------------------------------------------------------------
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def get_multiplicity(self,
-                         int        multip_bulk):
-    
-        multiplicity = particle_multiplicity(self, multip_bulk = multip_bulk)
-    
-        return multiplicity
-
-    # ----------------------------------------------------------------------
-    #  GET ENERGY
-    # ----------------------------------------------------------------------
-
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def get_energy(self):
+    def get_n_twin(self):
 
         cdef:
-            double     lattice_constant = self.lattice_constant
-            double     e_coh_bulk       = self.e_coh_bulk
-            np.ndarray e_relax_list     = self.e_relax_list
-            int        n_atoms          = self.n_atoms
-            np.ndarray n_coord_dist     = self.n_coord_dist
-            np.ndarray layers           = self.layers
-            float      e_twin           = self.e_twin
-            float      shear_modulus    = self.shear_modulus
-            float      k_strain         = self.k_strain
+            np.ndarray layers = self.layers
 
         cdef:
-            int        n
-            double     e_form_clean
-            double     v_atom
-            double     e_strain
-            double     e_coh        = 0.
-            double     sqrt_n_coord = 0.
-            double     n_twin       = 0.
-
-        for i in range(13):
-            e_coh += n_coord_dist[i]*e_coh_bulk*np.sqrt(i)/np.sqrt(12)
-            e_coh += n_coord_dist[i]*e_relax_list[i]
-
-        v_atom = 1./4.*lattice_constant**3
-
-        e_strain = k_strain*shear_modulus*v_atom*n_atoms
-
-        e_coh += e_strain
+            int        i, j
+            float      n_twin = 0.
 
         for i in range(20):
             for j in range(layers[i]+1):
                 n_twin += j*1.5
 
-        e_coh += n_twin*e_twin
+        self.n_twin = n_twin
 
-        e_form_clean = e_coh-e_coh_bulk*n_atoms
+        return n_twin
 
-        self.n_twin       = int(np.round(n_twin))
-        self.e_form_clean = e_form_clean
-        self.e_spec_clean = e_form_clean/n_atoms
-        self.e_form       = e_form_clean
-        self.e_spec       = e_form_clean/n_atoms
+################################################################################
+# CALCULATE NEIGHBORS
+################################################################################
 
-        return e_form_clean
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def calculate_neighbors(np.ndarray positions   ,
+                        np.ndarray cell        ,
+                        float      interact_len):
 
-    # ----------------------------------------------------------------------
-    #  GET ENERGY WITH ADS
-    # ----------------------------------------------------------------------
+    cdef:
+        int        i, j, k, p, q, c
+        list       box_num
+        float      distance
+        np.ndarray cell_diag = sum(cell)
+        int        n_atoms   = len(positions)
+        int        n_max     = 108
+        int        max_coord = 12
+        np.ndarray dist_vect = np.zeros(3, dtype = float)
+        np.ndarray box_len   = np.zeros(3, dtype = float)
+        np.ndarray neighbors = np.zeros((n_atoms, max_coord), dtype = int)
+        np.ndarray n_coord   = np.zeros(n_atoms, dtype = int)
 
-    @cython.cdivision(True)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def get_energy_with_ads(self,
-                            double     bond_len     ,
-                            double     y_zero_e_bind,
-                            double     m_ang_e_bind ,
-                            double     alpha_cov    ,
-                            double     beta_cov     ,
-                            double     temperature  ,
-                            double     delta_mu_ads ,
-                            list       f_e_bind_corr,
-                            str        entropy_model,
-                            int        averag_e_bind,
-                            str        e_form_denom ):
+    box_num = [int(np.ceil(cell_diag[0]/interact_len)),
+               int(np.ceil(cell_diag[1]/interact_len)),
+               int(np.ceil(cell_diag[2]/interact_len))]
+    
+    box_len = np.divide(cell_diag, box_num)
+    
+    cdef:
+        np.ndarray i_arrays = np.zeros((n_atoms, 3), dtype = int)
+        np.ndarray i_matrix = np.zeros(box_num+[n_max], dtype = int)
+        np.ndarray i_count  = np.zeros(box_num, dtype = int)
+    
+    for i in range(len(i_matrix)):
+        i_matrix[i] = -1
+    
+    for p in range(n_atoms):
+        i = int(np.floor(positions[p][0]/box_len[0]+1e-6))
+        j = int(np.floor(positions[p][1]/box_len[1]+1e-6))
+        k = int(np.floor(positions[p][2]/box_len[2]+1e-6))
+        i_arrays[p] = np.array([i,j,k])
+        for ii in (i-1, i, i+1):
+            for jj in (j-1, j, j+1):
+                for kk in (k-1, k, k+1):
+                    if (0 <= ii < box_num[0] and
+                        0 <= jj < box_num[1] and
+                        0 <= kk < box_num[2]):
+                        c = int(i_count[ii,jj,kk])
+                        i_matrix[ii,jj,kk,c] = p
+                        i_count[ii,jj,kk] += 1
 
-        cdef:
-            double     area_surf
-            double     e_form_ads
+    for i in range(n_atoms):
+        for j in range(max_coord):
+            neighbors[i,j] = -1
 
-        area_surf = get_surface_area(self,
-                                     bond_len = bond_len)
+    for p in range(n_atoms):
+        i = int(i_arrays[p][0])
+        j = int(i_arrays[p][1])
+        k = int(i_arrays[p][2])
+        for q in i_matrix[i,j,k]:
+            if q >= 0 and q != p:
+                dist_vect = positions[p]-positions[q]
+                distance = sqrt(pow(dist_vect[0],2)+
+                                pow(dist_vect[1],2)+
+                                pow(dist_vect[2],2))
+                if distance < interact_len:
+                    c = int(n_coord[p])
+                    neighbors[p,c] = q
+                    n_coord[p] += 1
 
-        e_form_ads = get_e_form_with_ads(self,
-                                         y_zero_e_bind = y_zero_e_bind,
-                                         m_ang_e_bind  = m_ang_e_bind ,
-                                         alpha_cov     = alpha_cov    ,
-                                         beta_cov      = beta_cov     ,
-                                         area_surf     = area_surf    ,
-                                         temperature   = temperature  ,
-                                         delta_mu_ads  = delta_mu_ads ,
-                                         f_e_bind_corr = f_e_bind_corr,
-                                         entropy_model = entropy_model,
-                                         averag_e_bind = averag_e_bind,
-                                         e_form_denom  = e_form_denom )
-
-        return e_form_ads
+    return neighbors
 
 ################################################################################
 # GET SURFACE AREA
@@ -1124,7 +1003,7 @@ class IcosahedronShape:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def get_surface_area(object,
-                     double     bond_len):
+                     float      bond_len):
 
     cdef:
         list       shell_tmp  = []
@@ -1138,7 +1017,7 @@ def get_surface_area(object,
             shell_tmp += [positions[i]]
 
     cdef:
-        double     area_surf
+        float      area_surf
         np.ndarray shell = np.array(shell_tmp)
 
     for i in range(len(positions)):
@@ -1166,13 +1045,13 @@ def get_surface_area(object,
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def get_e_form_with_ads(object,
-                        double     y_zero_e_bind,
-                        double     m_ang_e_bind ,
-                        double     alpha_cov    ,
-                        double     beta_cov     ,
-                        double     area_surf    ,
-                        double     temperature  ,
-                        double     delta_mu_ads ,
+                        float      y_zero_e_bind,
+                        float      m_ang_e_bind ,
+                        float      alpha_cov    ,
+                        float      beta_cov     ,
+                        float      area_surf    ,
+                        float      temperature  ,
+                        float      delta_mu_ads ,
                         list       f_e_bind_corr,
                         str        entropy_model,
                         int        averag_e_bind,
@@ -1182,7 +1061,7 @@ def get_e_form_with_ads(object,
     cdef:
         int        i, j, cn
         int        n_atoms          = object.n_atoms
-        double     e_form_clean     = object.e_form_clean
+        float      e_form_clean     = object.e_form_clean
         np.ndarray n_coord          = object.n_coord
         np.ndarray n_coord_dist     = object.n_coord_dist
         np.ndarray n_coord_top      = np.array([], dtype = int)
@@ -1203,15 +1082,15 @@ def get_e_form_with_ads(object,
             n_coord_dist_uns = np.append(n_coord_dist_uns, n_coord_dist[cn])
 
     cdef:
-        double     e_bind
-        double     cov_tot
-        double     coverage
-        double     e_bind_corr
+        float      e_bind
+        float      cov_tot
+        float      coverage
+        float      e_bind_corr
         int        n_ads_tot       = 0
         int        n_uns_tot       = 0
-        double     e_bind_ave      = 0.
-        double     g_bind_ave      = 0.
-        double     e_form_zero     = 0.
+        float      e_bind_ave      = 0.
+        float      g_bind_ave      = 0.
+        float      e_form_zero     = 0.
         int        n_atoms_top     = len(n_coord_top)
         int        n_indices_uns   = len(indices_uns)
         int        n_indices_sat   = 0
@@ -1230,7 +1109,7 @@ def get_e_form_with_ads(object,
 
         raise NameError("e_form_denom: 'N met' | 'N met + N ads'")
 
-    if entropy_model not in ('2D ideal gas', '2D lattice gas'):
+    if entropy_model not in (None, '2D ideal gas', '2D lattice gas'):
 
         raise NameError("entropy_model: '2D ideal gas' | '2D lattice gas'")
 
@@ -1261,7 +1140,11 @@ def get_e_form_with_ads(object,
             if cov_tot > 0.999:
                 cov_tot = 0.999
     
-            if entropy_model == '2D lattice gas':
+            if entropy_model is None:
+                
+                s_conf = 0.
+    
+            elif entropy_model == '2D lattice gas':
 
                 s_conf = n_ads_tot*kB_eV*(np.log((1-cov_tot)/cov_tot) - 
                                           np.log(1-cov_tot)/cov_tot)
@@ -1270,8 +1153,6 @@ def get_e_form_with_ads(object,
 
                 s_conf = n_ads_tot*kB_eV*(-np.log(cov_tot))
 
-            s_conf = 0.                                                         # NEGLECTED!
-    
             e_form_ads_list[i] = (e_form_zero + delta_e_cov + e_bind_corr - 
                                   temperature*s_conf)
 
@@ -1361,7 +1242,11 @@ def get_e_form_with_ads(object,
             if cov_tot > 0.999:
                 cov_tot = 0.999
     
-            if entropy_model == '2D lattice gas':
+            if entropy_model is None:
+                
+                s_conf = 0.
+    
+            elif entropy_model == '2D lattice gas':
 
                 s_conf = n_ads_tot*kB_eV*(np.log((1-cov_tot)/cov_tot) - 
                                           np.log(1-cov_tot)/cov_tot)
@@ -1370,8 +1255,6 @@ def get_e_form_with_ads(object,
 
                 s_conf = n_ads_tot*kB_eV*(-np.log(cov_tot))
 
-            s_conf = 0.                                                         # NEGLECTED!
-    
             delta_e_cov = n_ads_tot*alpha_cov*(area_surf/n_ads_tot)**-beta_cov
     
             e_form_ads_list[i] = (e_form_zero + delta_e_cov + e_bind_corr - 
@@ -1410,7 +1293,11 @@ def get_e_form_with_ads(object,
             if cov_tot > 0.999:
                 cov_tot = 0.999
     
-            if entropy_model == '2D lattice gas':
+            if entropy_model is None:
+    
+                s_conf = 0.
+    
+            elif entropy_model == '2D lattice gas':
 
                 s_conf = n_ads_tot*kB_eV*(np.log((1-cov_tot)/cov_tot) - 
                                           np.log(1-cov_tot)/cov_tot)
@@ -1419,8 +1306,6 @@ def get_e_form_with_ads(object,
 
                 s_conf = n_ads_tot*kB_eV*(-np.log(cov_tot))
 
-            s_conf = 0.                                                         # NEGLECTED!
-    
             delta_e_cov = n_ads_tot*alpha_cov*(area_surf/n_ads_tot)**-beta_cov
     
             e_form_ads_list[i] = (e_form_zero + delta_e_cov + e_bind_corr - 
@@ -1475,15 +1360,15 @@ def get_n_ads_uns(np.ndarray n_ads_uns       ,
         int        i
         np.ndarray err = np.zeros(len(n_ads_uns))
     
-    #for i in range(len(n_ads_uns)):
-    #
-    #    if n_ads_uns[i] > n_coord_dist_uns[i]-epsi:
-    #        err[i] += scale_factor*(n_ads_uns[i]-n_coord_dist_uns[i]+epsi)
-    #        n_ads_uns[i] = n_ads_tot-epsi
-    #    
-    #    elif n_ads_uns[i] < 0.+epsi:
-    #        err[i] += scale_factor*(n_ads_uns[i]-0.-epsi)
-    #        n_ads_uns[i] = 0.+epsi
+    for i in range(len(n_ads_uns)):
+    
+        if n_ads_uns[i] > n_coord_dist_uns[i]-epsi:
+            err[i] += scale_factor*(n_ads_uns[i]-n_coord_dist_uns[i]+epsi)
+            n_ads_uns[i] = n_ads_tot-epsi
+        
+        elif n_ads_uns[i] < 0.+epsi:
+            err[i] += scale_factor*(n_ads_uns[i]-0.-epsi)
+            n_ads_uns[i] = 0.+epsi
     
     err[0] = np.sum(n_ads_uns)-n_ads_tot
 
