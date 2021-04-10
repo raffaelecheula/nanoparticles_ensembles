@@ -200,7 +200,8 @@ def get_active_sites_shell(surface,
                            specify_supp_int = True ,
                            specify_facets   = False,
                            check_duplicates = False,
-                           multiple_facets  = False):
+                           multiple_facets  = False,
+                           convex_sites     = True ):
 
     active_sites = []
     index = 0
@@ -221,23 +222,24 @@ def get_active_sites_shell(surface,
                         if len([ ci for ci in a.neigh_zero
                                  if ci in surface[bi].neigh_zero ]) == 3 ]
 
-            position  = np.zeros(3)
-            neighbors = []
-            n_coord   = []
+            position   = np.zeros(3)
+            neighbors  = []
+            n_coord    = [a.n_coord]
+            facet_type = ['110']
             
             for bi in bi_vect:
 
                 b = surface[bi]
 
-                position += b.position/(len(bi_vect))
+                position  += b.position/(len(bi_vect))
                 neighbors += [b.index]
-                n_coord += [b.n_coord]
+                n_coord   += [b.n_coord]
 
             if len(bi_vect) == 5:
-                position = a.position.copy()
                 facet_type = ['dec']
-            else:
-                facet_type = []
+
+            if convex_sites is False:
+                position = (position+a.position)/2.
 
             active_sites += [ActiveSite(name       = 'lho'     ,
                                         position   = position  ,
@@ -305,9 +307,21 @@ def get_active_sites_shell(surface,
                         
                     if len(di_vect) == 0:
                     
-                        position  = (b.position+c.position)/2.
-                        neighbors = [b.index, c.index, a.index]
-                        n_coord   = [b.n_coord, c.n_coord]
+                        ei = [ ei for ei in b.neighbors
+                               if ei in c.neighbors if ei != a.index ][0]
+                    
+                        e = surface[ei]
+                    
+                        if convex_sites is True:
+                            position = (b.position+c.position)/2.
+                        
+                        else:
+                            position = (b.position+c.position +
+                                        a.position+e.position)/4.
+                        
+                        neighbors = [b.index, c.index, a.index, e.index]
+                        
+                        n_coord = [b.n_coord, c.n_coord, a.n_coord, e.n_coord]
                         
                         active_sites += [ActiveSite(name      = 'lbr'    ,
                                                     position  = position ,
@@ -315,10 +329,10 @@ def get_active_sites_shell(surface,
                                                     n_coord   = n_coord  ,
                                                     index     = index    )]
             
-                        a_site.neighbors += [index]
+                        for ii in (b.index, c.index, a.index, e.index):
+                            active_sites[ii].neighbors += [index]
                         
                         for ii in (b.index, c.index):
-                            active_sites[ii].neighbors += [index]
                             active_sites[ii].neighbors += [a.index]
                         
                         index += 1
@@ -336,69 +350,82 @@ def get_active_sites_shell(surface,
 
                 b = surface[bi]
 
-                for ci in [ ci for ci in a.neighbors
-                            if ci > b.index
-                            if ci not in b.neighbors 
-                            if surface[ci].n_coord < 11 ]:
-
-                    c = surface[ci]
-
-                    for di in [ di for di in b.neighbors
-                                if di in c.neighbors 
+                for ci, di in [ (ci, di) for ci in a.neighbors
+                                for di in b.neighbors
+                                if ci > b.index
                                 if di > a.index
+                                if di in surface[ci].neighbors 
+                                if ci not in b.neighbors
                                 if di not in a.neighbors 
+                                if surface[ci].n_coord < 11
                                 if surface[di].n_coord < 11 ]:
 
-                        d = surface[di]
+                    c = surface[ci]
+                    d = surface[di]
 
-                        if [ ei for ei in a.neighbors
-                             if ei in b.neighbors 
-                             if ei in c.neighbors 
-                             if ei in d.neighbors ]:
-                            continue
+                    if [ ei for ei in a.neighbors
+                         if ei in b.neighbors 
+                         if ei in c.neighbors 
+                         if ei in d.neighbors 
+                         if surface[ei].n_coord < 11 ]:
+                    
+                        continue
 
-                        position  = (a.position+b.position + 
-                                     c.position+d.position)/4.
-                        neighbors = [a.index, b.index,
-                                     c.index, d.index]
-                        n_coord   = [a.n_coord, b.n_coord,
-                                     c.n_coord, d.n_coord]
+                    position = (a.position+b.position + 
+                                c.position+d.position)/4.
 
-                        active_sites += [ActiveSite(name      = 'hol'    ,
-                                                    position  = position ,
-                                                    neighbors = neighbors, 
-                                                    n_coord   = n_coord  ,
-                                                    index     = index    )]
+                    neighbors = [a.index, b.index, c.index, d.index]
 
-                        active_sites[index].facet_type = ['100']
+                    n_coord = [a.n_coord, b.n_coord, c.n_coord, d.n_coord]
 
-                        for ii in (a.index, b.index, c.index, d.index):
-                            active_sites[ii].neighbors += [index]
-                        
-                        index += 1
+                    active_sites += [ActiveSite(name      = 'hol'    ,
+                                                position  = position ,
+                                                neighbors = neighbors, 
+                                                n_coord   = n_coord  ,
+                                                index     = index    )]
 
-                #if len([ ci for ci in a.neigh_zero
-                #         if ci in b.neigh_zero
-                #         if not [ s for s in surface 
-                #                  if s.index_zero == ci
-                #                  if s.n_coord < 4 ] ]) > 3:
+                    active_sites[index].facet_type = ['100']
+
+                    for ii in (a.index, b.index, c.index, d.index):
+                        active_sites[ii].neighbors += [index]
+                    
+                    index += 1
+
+                ei_vect = [ ei for ei in a.neigh_zero if ei in b.neigh_zero ]
                 
-                if len([ ci for ci in a.neigh_zero
-                         if ci in b.neigh_zero ]) > 3:
+                if len(ei_vect) > 3:
                     
                     for ci, di in [(ci, di) for ci in a.neighbors
                                     for di in a.neighbors
                                     if ci > di
                                     if ci in b.neighbors
                                     if di in b.neighbors
-                                    if di not in surface[ci].neighbors ]:
+                                    if di not in surface[ci].neighbors 
+                                    if surface[ci].n_coord < 11
+                                    if surface[di].n_coord < 11]:
                     
                         c = surface[ci]
                         d = surface[di]
                     
-                        position  = (c.position+d.position)/2.
-                        neighbors = [a.index, b.index, c.index, d.index]
-                        n_coord   = [c.n_coord, d.n_coord]
+                        if [ fi for fi in ei_vect
+                             if [ f for f in surface 
+                                  if f.index_zero == fi
+                                  if f.n_coord < 4 ]
+                             if c.n_coord != 3
+                             if d.n_coord != 3 ]:
+                        
+                            continue
+                    
+                        if convex_sites is True:
+                            position = (c.position+d.position)/2.
+                        
+                        else:
+                            position = (a.position+b.position + 
+                                        c.position+d.position)/4.
+                        
+                        neighbors = [c.index, d.index, a.index, b.index]
+                        
+                        n_coord = [c.n_coord, d.n_coord, a.n_coord, b.n_coord]
                         
                         active_sites += [ActiveSite(name      = 'lbr'    ,
                                                     position  = position ,
@@ -406,16 +433,18 @@ def get_active_sites_shell(surface,
                                                     n_coord   = n_coord  ,
                                                     index     = index    )]
                     
-                        for i in (a.index, b.index, c.index, d.index):
-                            active_sites[i].neighbors += [index]
+                        for ii in (a.index, b.index, c.index, d.index):
+                            active_sites[ii].neighbors += [index]
                         
                         index += 1
                     
                     continue
 
-                position  = (a.position + b.position)/2.
+                position = (a.position + b.position)/2.
+                
                 neighbors = [a.index, b.index]
-                n_coord   = [a.n_coord, b.n_coord]
+                
+                n_coord = [a.n_coord, b.n_coord]
 
                 active_sites += [ActiveSite(name      = 'brg'    ,
                                             position  = position ,
@@ -423,65 +452,10 @@ def get_active_sites_shell(surface,
                                             n_coord   = n_coord  ,
                                             index     = index    )]
 
-                for i in (a.index, b.index):
-                    active_sites[i].neighbors += [index]
+                for ii in (a.index, b.index):
+                    active_sites[ii].neighbors += [index]
 
                 index += 1
-
-                """
-                for ci in [ ci for ci in a.neighbors
-                            if ci in b.neighbors 
-                            if ci > b.index
-                            if surface[ci].n_coord < 11 ]:
-
-                    c = surface[ci]
-
-                    if ( a.supp_contact is True
-                         or b.supp_contact is True 
-                         or c.supp_contact is True ):
-                         continue
-                    
-                    if [ di for di in a.neighbors 
-                         if di in b.neighbors
-                         if di in c.neighbors 
-                         if surface[di].n_coord == 3 ]:
-                        continue
-
-                    #if ( len([ di for di in a.neigh_zero
-                    #           if di in c.neigh_zero ]) > 3 or
-                    #     len([ di for di in b.neigh_zero
-                    #           if di in c.neigh_zero ]) > 3 ):
-                    #    continue
-
-                    position  = (a.position+b.position+c.position)/3.
-                    neighbors = [a.index, b.index, c.index]
-                    n_coord   = [a.n_coord, b.n_coord, c.n_coord]
-
-                    if [ i for i in a.neigh_zero
-                        if i in b.neigh_zero
-                        if i in c.neigh_zero ]:
-
-                        active_sites += [ActiveSite(name      = 'fcc'    ,
-                                                    position  = position ,
-                                                    neighbors = neighbors,
-                                                    n_coord   = n_coord  ,
-                                                    index     = index    )]
-
-                    else:
-
-                        active_sites += [ActiveSite(name      = 'hcp'    ,
-                                                    position  = position ,
-                                                    neighbors = neighbors,
-                                                    n_coord   = n_coord  ,
-                                                    index     = index    )]
-
-                    for i in (a.index, b.index, c.index):
-                        active_sites[i].neighbors += [index]
-
-                    index += 1
-                """
-
-    
 
     """
     Identification of fcc (fcc), and hcp (hcp) active sites. 
@@ -504,53 +478,48 @@ def get_active_sites_shell(surface,
                      if di in b.neighbors
                      if di in c.neighbors 
                      if surface[di].n_coord == 3 ]:
+                
                     continue
 
-                if len([ d for d in active_sites
-                         if d.name == 'brg'
-                         if d.neighbors[0] in [ai, bi, ci]
-                         if d.neighbors[1] in [ai, bi, ci] ]) == 3:
+                if len([ d_site for d_site in active_sites
+                         if d_site.name == 'brg'
+                         if d_site.neighbors[0] in [ai, bi, ci]
+                         if d_site.neighbors[1] in [ai, bi, ci] ]) != 3:
 
-                    position  = (a.position+b.position+c.position)/3.
-                    neighbors = [a.index, b.index, c.index]
-                    n_coord   = [a.n_coord, b.n_coord, c.n_coord]
+                    continue
 
-                    if [ ei for ei in a.neigh_zero
-                        if ei in b.neigh_zero
-                        if ei in c.neigh_zero ]:
+                position  = (a.position+b.position+c.position)/3.
+                
+                neighbors = [a.index, b.index, c.index]
+                
+                n_coord   = [a.n_coord, b.n_coord, c.n_coord]
 
-                        active_sites += [ActiveSite(name      = 'fcc'    ,
-                                                    position  = position ,
-                                                    neighbors = neighbors,
-                                                    n_coord   = n_coord  ,
-                                                    index     = index    )]
+                if [ ei for ei in a.neigh_zero
+                    if ei in b.neigh_zero
+                    if ei in c.neigh_zero ]:
 
-                    else:
-                    
-                        active_sites += [ActiveSite(name      = 'hcp'    ,
-                                                    position  = position ,
-                                                    neighbors = neighbors,
-                                                    n_coord   = n_coord  ,
-                                                    index     = index    )]
+                    active_sites += [ActiveSite(name      = 'fcc'    ,
+                                                position  = position ,
+                                                neighbors = neighbors,
+                                                n_coord   = n_coord  ,
+                                                index     = index    )]
 
-                    for i in (a.index, b.index, c.index):
-                        active_sites[i].neighbors += [index]
+                else:
+                
+                    active_sites += [ActiveSite(name      = 'hcp'    ,
+                                                position  = position ,
+                                                neighbors = neighbors,
+                                                n_coord   = n_coord  ,
+                                                index     = index    )]
 
-                    index += 1
+                for ii in (a.index, b.index, c.index):
+                    active_sites[ii].neighbors += [index]
+
+                index += 1
+
     """
-    Identification of theta-hollow (tho), and beta-hollow (bho) active sites. 
+    Identification neighbors of brg active sites. 
     """
-
-    for a_site in [ a_site for a_site in active_sites 
-                    if a_site.name == 'lbr' ]:
-    
-        for b in [ b for b in surface 
-                   if b.n_coord < 11
-                   if a_site.neighbors[0] in b.neighbors
-                   if a_site.neighbors[1] in b.neighbors ]:
-    
-            a_site.neighbors += [b.index]
-            active_sites[b.index].neighbors += [a_site.index]
 
     for a_site in [ a_site for a_site in active_sites 
                     if a_site.name == 'brg' ]:
@@ -563,98 +532,110 @@ def get_active_sites_shell(surface,
             a_site.neighbors += [b_site.index]
             b_site.neighbors += [a_site.index]
 
-    for a in [ a for a in active_sites if a.name == 'brg' ]:
+    """
+    Identification of beta-hollow (bho) active sites (also calles B5).
+    """
 
-        for bi, ci in [ (bi, ci) for bi in a.neighbors for ci in a.neighbors
-                        if active_sites[bi].name in ('fcc', 'hcp')
-                        if active_sites[ci].name == 'hol' ]:
+    for a_site in [ a_site for a_site in active_sites 
+                    if a_site.name == 'brg' ]:
+
+        for bi, ci in [ (bi, ci) for bi in a_site.neighbors
+                        for ci in a_site.neighbors
+                        if active_sites[bi].name == 'hol'
+                        if active_sites[ci].name in ('fcc', 'hcp') ]:
     
-            b = active_sites[bi]
-            c = active_sites[ci]
+            b_site = active_sites[bi]
+            c_site = active_sites[ci]
+    
+            di, ei = a_site.neighbors[:2]
 
-            d = surface[a.neighbors[0]]
-            e = surface[a.neighbors[1]]
+            d = surface[di]
+            e = surface[ei]
             
-            fi = [ fi for fi in d.neighbors if fi in e.neighbors ][0]
-
-            f = surface[fi]
-            
-            try: 
-                gi = [ gi for gi in surface[c.neighbors[0]].neigh_zero
-                           if gi in surface[c.neighbors[1]].neigh_zero
-                           if gi in surface[c.neighbors[2]].neigh_zero
-                           if gi in surface[c.neighbors[3]].neigh_zero ][0]
-            except:
+            if len([ ci for ci in d.neigh_zero if ci in e.neigh_zero ]) != 3:
+                
                 continue
             
-            mi, ni = [ i for i in c.neighbors[:4] if i not in a.neighbors[:2] ]
+            dir_1 = a_site.position-b_site.position
+            dir_2 = c_site.position-a_site.position
             
-            m = surface[mi]
-            n = surface[ni]
-            
-            dir_1 = (d.position+e.position)/2.-(m.position+n.position)/2.
-            dir_2 = f.position-(d.position+e.position)/2.
-            
-            dot_prod = np.dot(dir_1/np.linalg.norm(dir_1),
-                              dir_2/np.linalg.norm(dir_2))
-            
-            if gi not in f.neigh_zero and dot_prod < 0.8:
-            
-                #a.position = c.position
-                a.position = (2.*c.position+active_sites[bi].position)/3.
-                a.name = 'bho'
-                a.facet_type = ['311']
+            if np.dot(dir_1/np.linalg.norm(dir_1),
+                      dir_2/np.linalg.norm(dir_2)) > 0.80:
                 
-                for hi in c.neighbors:
+                continue
             
-                    a.neighbors += [hi]
+            b_site = active_sites[bi]
+            
+            a_site.name = 'bho'
+            
+            a_site.n_coord = b_site.n_coord[:]
+            
+            if convex_sites is True:
+                a_site.position = b_site.position.copy()
+            else:
+                a_site.position = (2*b_site.position+a_site.position)/3.
+            
+            for di in [ di for di in b_site.neighbors
+                        if di != a_site.index
+                        if di not in a_site.neighbors ]:
+            
+                a_site.neighbors += [di]
+                active_sites[di].neighbors += [a_site.index]
+            
+            for di in b_site.neighbors:
+                active_sites[di].neighbors.remove(bi)
+            
+            b_site.delete()
+            
+            a_site.facet_type = ['311']
+            
+            for hi in a_site.neighbors:
+                if '311' not in active_sites[hi].facet_type:
+                    active_sites[hi].facet_type += ['311']
 
-                    for j, li in enumerate(active_sites[hi].neighbors):
-                        if li == c.index:
-                            active_sites[hi].neighbors[j] = a.index
+    """
+    Identification of theta-hollow (tho) active sites. 
+    """
 
-                c.delete()
+    for a_site in [ a_site for a_site in active_sites 
+                    if a_site.name == 'lbr' ]:
 
-                for hi in a.neighbors:
-                    if '311' not in active_sites[hi].facet_type:
-                        active_sites[hi].facet_type += ['311']
-                for hi in b.neighbors:
-                    if '311' not in active_sites[hi].facet_type:
-                        active_sites[hi].facet_type += ['311']
-
-    for a in [ a for a in active_sites if a.name == 'lbr' ]:
-
-        for bi, ci in [ (bi, ci) for bi in a.neighbors for ci in a.neighbors
-                      if active_sites[bi].name == 'lho'
-                      if active_sites[ci].name == 'top'
-                      if bi not in active_sites[ci].neighbors ]:
+        for bi, ci in [ (bi, ci) for bi in a_site.neighbors
+                        for ci in a_site.neighbors
+                        if active_sites[bi].name == 'lho'
+                        if active_sites[ci].name == 'top'
+                        if bi not in active_sites[ci].neighbors
+                        if ( surface[ci].index_zero 
+                             not in surface[bi].neigh_zero ) ]:
     
-            b = active_sites[bi]
-            c = active_sites[ci]
+            c = surface[ci]
+    
+            b_site = active_sites[bi]
+            
+            a_site.name = 'tho'
+            
+            a_site.n_coord += [c.n_coord]
+            
+            if convex_sites is False:
+                a_site.position = (2*a_site.position+b_site.position)/3.
+            
+            for di in [ di for di in b_site.neighbors
+                        if di != a_site.index
+                        if di not in a_site.neighbors ]:
+        
+                a_site.neighbors += [di]
+                active_sites[di].neighbors += [a_site.index]
+        
+            for di in b_site.neighbors:
+                active_sites[di].neighbors.remove(bi)
 
-            d = surface[a.neighbors[0]]
-            e = surface[a.neighbors[1]]
-            
-            if surface[ci].index_zero not in surface[bi].neigh_zero:
-            
-                a.name = 'tho'
-                a.facet_type = ['210']
-                
-                a.position = (a.position+active_sites[bi].position)/2.
-                
-                for hi in b.neighbors:
-            
-                    a.neighbors += [hi]
-            
-                    for j, li in enumerate(active_sites[hi].neighbors):
-                        if li == b.index:
-                            active_sites[hi].neighbors[j] = a.index
-            
-                b.delete()
+            b_site.delete()
 
-                for hi in a.neighbors:
-                    if '210' not in active_sites[hi].facet_type:
-                        active_sites[hi].facet_type += ['210']
+            a_site.facet_type = ['210']
+
+            for di in a_site.neighbors:
+                if '210' not in active_sites[di].facet_type:
+                    active_sites[di].facet_type += ['210']
 
     """
     Identification of the facets of active sites. 
@@ -666,7 +647,8 @@ def get_active_sites_shell(surface,
 
     for a in [ a for a in active_sites if a.name == 'lho' ]:
 
-        a.facet_type = ['110']
+        if not a.facet_type:
+            a.facet_type = ['110']
 
         for bi in a.neighbors:
         
