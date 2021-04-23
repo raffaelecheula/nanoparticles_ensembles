@@ -135,14 +135,28 @@ class ActiveSite():
         self.__init__()
         self.deleted = True
 
+    def reduce_data(self):
+
+        vars_all = [var for var in vars(self)]
+    
+        vars_reduced = ['name'   ,
+                        'n_coord',
+                        'deleted']
+        
+        for var in [var for var in vars_all if var not in vars_reduced]:
+        
+            vars(self)[var] = None
+        
+            del vars(self)[var]
+
 ################################################################################
-# GET SURFACE SHELL
+# GET SURFACE
 ################################################################################
 
-def get_surface_shell(positions, neighbors, indices, n_coord,
-                      supp_contact = None, n_coord_max = 12):
+def get_surface(positions, neighbors, indices, n_coord,
+                supp_contact = None, n_coord_max = 12):
 
-    if supp_contact is None:
+    if not supp_contact:
         supp_contact = [False for j in range(len(n_coord))]
 
     indices_zero = np.copy(indices)
@@ -192,16 +206,16 @@ def get_surface_shell(positions, neighbors, indices, n_coord,
     return surface
 
 ################################################################################
-# GET ACTIVE SITES SHELL
+# GET ACTIVE SITES
 ################################################################################
 
-def get_active_sites_shell(surface,
-                           specify_n_coord  = True ,
-                           specify_supp_int = True ,
-                           specify_facets   = False,
-                           check_duplicates = False,
-                           multiple_facets  = False,
-                           convex_sites     = True ):
+def get_active_sites(surface,
+                     specify_n_coord  = True ,
+                     specify_supp_int = True ,
+                     specify_facets   = False,
+                     check_duplicates = False,
+                     multiple_facets  = False,
+                     convex_sites     = True ):
 
     active_sites = []
     index = 0
@@ -238,7 +252,7 @@ def get_active_sites_shell(surface,
             if len(bi_vect) == 5:
                 facet_type = ['dec']
 
-            if convex_sites is False:
+            if not convex_sites:
                 position = (position+a.position)/2.
 
             active_sites += [ActiveSite(name       = 'lho'     ,
@@ -312,7 +326,7 @@ def get_active_sites_shell(surface,
                     
                         e = surface[ei]
                     
-                        if convex_sites is True:
+                        if convex_sites:
                             position = (b.position+c.position)/2.
                         
                         else:
@@ -416,7 +430,7 @@ def get_active_sites_shell(surface,
                         
                             continue
                     
-                        if convex_sites is True:
+                        if convex_sites:
                             position = (c.position+d.position)/2.
                         
                         else:
@@ -570,7 +584,7 @@ def get_active_sites_shell(surface,
             
             a_site.n_coord = b_site.n_coord[:]
             
-            if convex_sites is True:
+            if convex_sites:
                 a_site.position = b_site.position.copy()
             else:
                 a_site.position = (2*b_site.position+a_site.position)/3.
@@ -616,7 +630,7 @@ def get_active_sites_shell(surface,
             
             a_site.n_coord += [c.n_coord]
             
-            if convex_sites is False:
+            if not convex_sites:
                 a_site.position = (2*a_site.position+b_site.position)/3.
             
             for di in [ di for di in b_site.neighbors
@@ -731,11 +745,11 @@ def get_active_sites_shell(surface,
 
     for a in [ a for a in active_sites if a.deleted is False ]:
     
-        if specify_n_coord is True:
+        if specify_n_coord:
 
             a.tag += ','.join(['{0:02d}'.format(n) for n in sorted(a.n_coord)])
 
-        elif specify_facets is True:
+        elif specify_facets:
     
             facets = a.facet_type[:]
     
@@ -744,7 +758,7 @@ def get_active_sites_shell(surface,
     
             a.tag += ','.join(['{}'.format(n) for n in sorted(facets)])
     
-        if specify_supp_int is True:
+        if specify_supp_int:
 
             if len(a.tag) > 0:
                 a.tag += '_'
@@ -755,7 +769,7 @@ def get_active_sites_shell(surface,
     Checking of duplicates active sites. 
     """
 
-    if check_duplicates is True:
+    if check_duplicates:
 
         for a in [ a for a in active_sites if a.deleted is False ]:
 
@@ -769,22 +783,22 @@ def get_active_sites_shell(surface,
     return active_sites
 
 ################################################################################
-# COUNT ACTIVE SITES
+# GET ACTIVE SITES DICT
 ################################################################################
 
-def count_active_sites(active_sites, with_tags = False):
+def get_active_sites_dict(active_sites, with_tags = False):
 
     active_sites_dict = {}
 
     for name in all_sites_names:
-        if with_tags is False:
+        if not with_tags:
             active_sites_dict[name] = 0
         else:
             active_sites_dict[name] = {}
 
     for a in [ a for a in active_sites if a.deleted is False ]:
 
-        if with_tags is False:
+        if not with_tags:
             active_sites_dict[a.name] += 1
 
         else:
@@ -806,7 +820,7 @@ def reduce_active_sites(active_sites_dict):
     for name in active_sites_dict:
 
         number = sum([ active_sites_dict[name][tag]
-                        for tag in active_sites_dict[name]])
+                       for tag in active_sites_dict[name] ])
 
         active_sites_dict_reduced[name] = number
 
@@ -870,8 +884,8 @@ def plot_active_sites_grid(active_sites,
 
     from mayavi import mlab
 
-    active_sites_dict = count_active_sites(active_sites = active_sites,
-                                           with_tags    = True        )
+    active_sites_dict = get_active_sites_dict(active_sites = active_sites,
+                                              with_tags    = True        )
 
     heigths = [a.position[2] for a in active_sites if a.deleted is False]
 
@@ -891,7 +905,7 @@ def plot_active_sites_grid(active_sites,
             
             tag_new = tag.split('_')[0]
     
-            if specify_n_coord is True:
+            if specify_n_coord:
         
                 n_coord = [ int(i) for i in tag_new.split(',') ]
                 n_coord_ave = sum(n_coord)/len(n_coord)
@@ -904,7 +918,7 @@ def plot_active_sites_grid(active_sites,
                     elif color[k] < 0.:
                         color[k] = 0.
         
-            elif specify_facets is True:
+            elif specify_facets:
         
                 facets = [ str(f) for f in tag_new.split(',') ]
         
@@ -914,7 +928,7 @@ def plot_active_sites_grid(active_sites,
                     for i in range(3):
                         color[i] += facet_colors_dict[facet][i]/len(facets)
         
-            if specify_supp_int is True and len(n_support) > 0:
+            if specify_supp_int and len(n_support) > 0:
                 for i in range(int(n_support[0])):
                     color = (2*color+grey)/3.
     
@@ -943,7 +957,7 @@ def plot_active_sites_grid(active_sites,
             connections = []
     
             for a in [ a for a in active_sites if a.deleted is False 
-                    and a.name == name and a.tag == tag ]:
+                       and a.name == name and a.tag == tag ]:
     
                 color = tuple(color_dict_new[name][tag])
     
@@ -952,7 +966,7 @@ def plot_active_sites_grid(active_sites,
                 else:
                     x, y = a.position_xy
     
-                if half_plot is True and z < z_half-1e-3:
+                if half_plot and z < z_half-1e-3:
                     continue
     
                 x_point.append(x)

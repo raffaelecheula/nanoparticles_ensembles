@@ -13,9 +13,6 @@
 
 from __future__ import absolute_import, division, print_function
 import numpy as np
-import spglib as sp
-from scipy import optimize
-from scipy.spatial import ConvexHull
 
 # CYTHON IMPORT
 
@@ -93,6 +90,56 @@ for i in range(len(octa_vert)):
 class ParticleShape:
 
     # ----------------------------------------------------------------------
+    #  SET LATTICE CONSTANT
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def set_lattice_constant(self,
+                             float      lc_new,
+                             float      lc_old = 0.):
+
+        if lc_old == 0.:
+            lc_old = self.lattice_constant
+
+        if lc_new != lc_old:
+            for position in self.positions:
+                position *= lc_new/lc_old
+
+        self.lattice_constant = lc_new
+
+        return self.positions
+
+    # ----------------------------------------------------------------------
+    #  CLEAN DATA
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def reduce_data(self):
+
+        for site in self.active_sites:
+
+            site.reduce_data()
+
+        vars_all = [var for var in vars(self)]
+
+        vars_reduced = ['particle_type'   ,
+                        'n_atoms'         ,
+                        'positions'       ,
+                        'n_coord_dist'    ,
+                        'lattice_constant',
+                        'active_sites'    ]
+    
+        for var in [var for var in vars_all if var not in vars_reduced]:
+
+            vars(self)[var] = None
+
+            del vars(self)[var]
+    
+    # ----------------------------------------------------------------------
     #  TO ASE ATOMS
     # ----------------------------------------------------------------------
 
@@ -123,9 +170,9 @@ class ParticleShape:
                      int        n_iterations  ,
                      int        remove_groups = False):
 
-        positions = particle_remove_atoms(self,
-                                          n_iterations  = n_iterations ,
-                                          remove_groups = remove_groups)
+        positions = remove_atoms(self,
+                                 n_iterations  = n_iterations ,
+                                 remove_groups = remove_groups)
 
         return positions
 
@@ -139,7 +186,7 @@ class ParticleShape:
     def get_multiplicity(self,
                          int        multip_bulk):
     
-        multiplicity = particle_multiplicity(self, multip_bulk = multip_bulk)
+        multiplicity = get_multiplicity(self, multip_bulk = multip_bulk)
     
         return multiplicity
 
@@ -150,7 +197,7 @@ class ParticleShape:
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def get_energy(self):
+    def get_energy_clean(self):
 
         cdef:
             int        n_atoms      = self.n_atoms
@@ -187,6 +234,24 @@ class ParticleShape:
         return e_form_clean
 
     # ----------------------------------------------------------------------
+    #  GET SURFACE AREA
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_surface_area(self,
+                         float      bond_length = 0.):
+
+        cdef:
+            float      area_surf
+
+        area_surf = get_surface_area(self,
+                                     bond_length = bond_length)
+
+        return area_surf
+
+    # ----------------------------------------------------------------------
     #  GET ENERGY WITH ADS
     # ----------------------------------------------------------------------
 
@@ -194,37 +259,19 @@ class ParticleShape:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     def get_energy_with_ads(self,
-                            float      bond_len     ,
-                            float      y_zero_e_bind,
-                            float      m_ang_e_bind ,
-                            float      alpha_cov    ,
-                            float      beta_cov     ,
-                            float      temperature  ,
-                            float      delta_mu_ads ,
-                            list       f_e_bind_corr,
-                            str        entropy_model,
-                            int        averag_e_bind,
-                            str        e_form_denom ):
+                            dict       g_bind_dict   ,
+                            float      bond_length   ,
+                            float      temperature   ,
+                            int        sites_equilib = True):
 
         cdef:
-            float      area_surf
             float      e_form_ads
 
-        area_surf = get_surface_area(self,
-                                     bond_len = bond_len)
-
-        e_form_ads = get_e_form_with_ads(self,
-                                         y_zero_e_bind = y_zero_e_bind,
-                                         m_ang_e_bind  = m_ang_e_bind ,
-                                         alpha_cov     = alpha_cov    ,
-                                         beta_cov      = beta_cov     ,
-                                         area_surf     = area_surf    ,
+        e_form_ads = get_energy_with_ads(self,
+                                         g_bind_dict   = g_bind_dict  ,
+                                         bond_length   = bond_length  ,
                                          temperature   = temperature  ,
-                                         delta_mu_ads  = delta_mu_ads ,
-                                         f_e_bind_corr = f_e_bind_corr,
-                                         entropy_model = entropy_model,
-                                         averag_e_bind = averag_e_bind,
-                                         e_form_denom  = e_form_denom )
+                                         sites_equilib = sites_equilib)
 
         return e_form_ads
 
@@ -235,24 +282,30 @@ class ParticleShape:
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def get_active_sites(self):
+    def get_active_sites(self,
+                         int        specify_n_coord  = True ,
+                         int        specify_supp_int = False,
+                         int        specify_facets   = False,
+                         int        check_duplicates = False,
+                         int        multiple_facets  = False,
+                         int        convex_sites     = True ):
 
-        from nanoparticle_active_sites import (get_surface_shell     ,
-                                               get_active_sites_shell)
+        from nanoparticle_active_sites import get_surface, get_active_sites
 
-        surface = get_surface_shell(positions    = self.positions,
-                                    neighbors    = self.neighbors, 
-                                    indices      = self.indices  , 
-                                    n_coord      = self.n_coord  ,
-                                    supp_contact = None          ,
-                                    n_coord_max  = 12            )
+        surface = get_surface(positions    = self.positions,
+                              neighbors    = self.neighbors, 
+                              indices      = self.indices  , 
+                              n_coord      = self.n_coord  ,
+                              supp_contact = None          ,
+                              n_coord_max  = 12            )
         
-        active_sites = get_active_sites_shell(surface          = surface,
-                                              specify_n_coord  = True   ,
-                                              specify_supp_int = False  ,
-                                              specify_facets   = False  ,
-                                              check_duplicates = False  ,
-                                              multiple_facets  = False  )
+        active_sites = get_active_sites(surface          = surface         ,
+                                        specify_n_coord  = specify_n_coord ,
+                                        specify_supp_int = specify_supp_int,
+                                        specify_facets   = specify_facets  ,
+                                        check_duplicates = check_duplicates,
+                                        multiple_facets  = multiple_facets ,
+                                        convex_sites     = convex_sites    )
 
         self.active_sites = active_sites
 
@@ -265,13 +318,14 @@ class ParticleShape:
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def get_active_sites_dict(self):
+    def get_active_sites_dict(self,
+                              int        with_tags  = True):
 
-        from nanoparticle_active_sites import count_active_sites
+        from nanoparticle_active_sites import get_active_sites_dict
 
-        active_sites_dict = count_active_sites(
+        active_sites_dict = get_active_sites_dict(
                                             active_sites = self.active_sites,
-                                            with_tags    = True             )
+                                            with_tags    = with_tags        )
 
         self.active_sites_dict = active_sites_dict
 
@@ -291,13 +345,16 @@ class FccParticleShape(ParticleShape):
                  np.ndarray miller_indices  ,
                  np.ndarray planes_distances,
                  np.ndarray e_relax_list    ,
+                 float      lattice_constant,
                  float      scale_one       , 
                  float      scale_two       , 
                  int        n_coord_min     ,
                  float      interact_len    , 
                  float      e_coh_bulk      ,
-                 int        miller_symmetry ):
+                 int        miller_symmetry ,
+                 list       active_sites    = []):
 
+        self.particle_type    = 'fcc particle'
         self.positions        = positions
         self.neighbors        = neighbors
         self.cell             = cell
@@ -305,13 +362,14 @@ class FccParticleShape(ParticleShape):
         self.miller_indices   = miller_indices
         self.planes_distances = planes_distances
         self.e_relax_list     = e_relax_list
+        self.lattice_constant = lattice_constant
         self.scale_one        = scale_one
         self.scale_two        = scale_two
         self.n_coord_min      = n_coord_min
         self.interact_len     = interact_len
         self.e_coh_bulk       = e_coh_bulk
-        self.particle_type    = 'fcc particle'
         self.miller_symmetry  = miller_symmetry
+        self.active_sites     = active_sites
 
     # ----------------------------------------------------------------------
     #  GET SHAPE
@@ -520,8 +578,10 @@ class DecahedronShape(ParticleShape):
                  float      e_coh_bulk      ,
                  float      e_twin          ,
                  float      shear_modulus   ,
-                 float      k_strain        ):
+                 float      k_strain        ,
+                 list       active_sites    = []):
 
+        self.particle_type    = 'decahedron'
         self.positions        = positions
         self.neighbors        = neighbors
         self.layers_min       = layers_min
@@ -535,7 +595,7 @@ class DecahedronShape(ParticleShape):
         self.e_twin           = e_twin
         self.shear_modulus    = shear_modulus
         self.k_strain         = k_strain
-        self.particle_type    = 'decahedron'
+        self.active_sites     = active_sites
 
         for i in range(5):
             if self.layers_min[i] < 1:
@@ -760,8 +820,10 @@ class IcosahedronShape(ParticleShape):
                  float      e_coh_bulk      ,
                  float      e_twin          ,
                  float      shear_modulus   ,
-                 float      k_strain        ):
+                 float      k_strain        ,
+                 list       active_sites    = []):
 
+        self.particle_type    = 'icosahedron'
         self.positions        = positions
         self.neighbors        = neighbors
         self.layers           = layers
@@ -773,7 +835,7 @@ class IcosahedronShape(ParticleShape):
         self.e_twin           = e_twin
         self.shear_modulus    = shear_modulus
         self.k_strain         = k_strain
-        self.particle_type    = 'icosahedron'
+        self.active_sites     = active_sites
 
     # ----------------------------------------------------------------------
     #  GET SHAPE
@@ -1003,33 +1065,30 @@ def calculate_neighbors(np.ndarray positions   ,
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def get_surface_area(object,
-                     float      bond_len):
+                     float      bond_length):
+
+    from scipy.spatial import ConvexHull
 
     cdef:
-        list       shell_tmp  = []
-        np.ndarray positions  = np.copy(object.positions)
-        np.ndarray n_coord    = object.n_coord
-        np.ndarray center     = np.zeros(3, dtype = float)
-        np.ndarray direction  = np.zeros(3, dtype = float)
-
-    for i in range(len(positions)):
-        if n_coord[i] != 12:
-            shell_tmp += [positions[i]]
+        np.ndarray positions = np.copy(object.positions)
+        np.ndarray center    = np.zeros(3, dtype = float)
+        np.ndarray direction = np.zeros(3, dtype = float)
 
     cdef:
         float      area_surf
-        np.ndarray shell = np.array(shell_tmp)
 
     for i in range(len(positions)):
         center += positions[i]/len(positions)
 
-    for i in range(len(shell)):
-        direction = shell[i]-center
-        if np.linalg.norm(direction) > 1e-3:
+    for i in range(len(positions)):
+    
+        direction = positions[i]-center
+    
+        if np.linalg.norm(direction) > 1e-4:
             direction /= np.linalg.norm(direction)
-            shell[i] += direction*bond_len
+            positions[i] += direction*bond_length
 
-    hull = ConvexHull(shell)
+    hull = ConvexHull(positions)
 
     area_surf = hull.area
 
@@ -1044,341 +1103,105 @@ def get_surface_area(object,
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def get_e_form_with_ads(object,
-                        float      y_zero_e_bind,
-                        float      m_ang_e_bind ,
-                        float      alpha_cov    ,
-                        float      beta_cov     ,
-                        float      area_surf    ,
-                        float      temperature  ,
-                        float      delta_mu_ads ,
-                        list       f_e_bind_corr,
-                        str        entropy_model,
-                        int        averag_e_bind,
-                        str        e_form_denom ,
-                        int        n_coord_thr  = 10):
+def get_energy_with_ads(object,
+                        dict       g_bind_dict   ,
+                        float      bond_length   ,
+                        float      temperature   ,
+                        int        sites_equilib = True):
 
     cdef:
-        int        i, j, cn
-        int        n_atoms          = object.n_atoms
+        float      area_surf
+        list       active_sites_sel = []
+        float      kB_T             = kB_eV*temperature
         float      e_form_clean     = object.e_form_clean
-        np.ndarray n_coord          = object.n_coord
-        np.ndarray n_coord_dist     = object.n_coord_dist
-        np.ndarray n_coord_top      = np.array([], dtype = int)
-        np.ndarray indices_uns      = np.array([], dtype = int)
-        np.ndarray n_coord_dist_uns = np.array([], dtype = int)
-        np.ndarray indices_sat      = np.array([], dtype = int)
-        np.ndarray n_coord_dist_sat = np.array([], dtype = int)
+        float      e_spec_clean     = object.e_spec_clean
+        int        n_atoms          = object.n_atoms
+        int        n_atoms_surf     = sum(object.n_coord_dist[:10])
 
-    for i in range(n_atoms):
-        if n_coord[i] < n_coord_thr:
-            n_coord_top = np.append(n_coord_top, n_coord[i])
+    area_surf = object.get_surface_area(bond_length = bond_length)
 
-    n_coord_top = np.sort(n_coord_top)
-
-    for cn in range(n_coord_thr):
-        if n_coord_dist[cn] > 0:
-            indices_uns = np.append(indices_uns, cn)
-            n_coord_dist_uns = np.append(n_coord_dist_uns, n_coord_dist[cn])
-
-    cdef:
-        float      e_bind
-        float      cov_tot
-        float      coverage
-        float      e_bind_corr
-        int        n_ads_tot       = 0
-        int        n_uns_tot       = 0
-        float      e_bind_ave      = 0.
-        float      g_bind_ave      = 0.
-        float      e_form_zero     = 0.
-        int        n_atoms_top     = len(n_coord_top)
-        int        n_indices_uns   = len(indices_uns)
-        int        n_indices_sat   = 0
-        np.ndarray n_ads           = np.zeros(n_coord_thr, dtype = float)
-        np.ndarray cov             = np.zeros(n_coord_thr, dtype = float)
-        np.ndarray g_bind          = np.zeros(n_coord_thr, dtype = float)
-        np.ndarray e_form_ads_list = np.zeros(n_atoms_top, dtype = float)
-        np.ndarray e_spec_ads_list = np.zeros(n_atoms_top, dtype = float)
-        np.ndarray coverage_list   = np.zeros(n_atoms_top, dtype = float)
-        np.ndarray cov_uns         = np.zeros(n_indices_uns, dtype = float)
-        np.ndarray n_ads_uns       = np.zeros(n_indices_uns, dtype = float)
-        np.ndarray g_bind_uns      = np.array([], dtype = float)
-        np.ndarray g_bind_sat      = np.array([], dtype = float)
-
-    if e_form_denom not in ('N met', 'N met + N ads'):
-
-        raise NameError("e_form_denom: 'N met' | 'N met + N ads'")
-
-    if entropy_model not in (None, '2D ideal gas', '2D lattice gas'):
-
-        raise NameError("entropy_model: '2D ideal gas' | '2D lattice gas'")
-
-    if averag_e_bind is True:
-
-        for cn in range(n_coord_thr):
-            
-            e_bind = y_zero_e_bind+m_ang_e_bind*cn
-
-            e_bind_ave += e_bind*n_coord_dist[cn]/n_atoms_top
-
-        g_bind_ave = e_bind_ave-delta_mu_ads
-
-        for i in range(n_atoms_top):
+    for site in object.active_sites:
+        if site.name in g_bind_dict:
+            active_sites_sel += [site]
     
-            n_ads_tot += 1
-            cov_tot = float(n_ads_tot)/n_atoms_top
-            coverage_list[i] = cov_tot
-    
-            e_form_zero = e_form_clean+n_ads_tot*g_bind_ave
-    
-            delta_e_cov = n_ads_tot*alpha_cov*(area_surf/n_ads_tot)**-beta_cov
-    
-            e_bind_corr = 0.
-            for n in range(13):
-                e_bind_corr += cov_tot*n_coord_dist[n]*f_e_bind_corr[n](cov_tot)
-    
-            if cov_tot > 0.999:
-                cov_tot = 0.999
-    
-            if entropy_model is None:
-                
-                s_conf = 0.
-    
-            elif entropy_model == '2D lattice gas':
-
-                s_conf = n_ads_tot*kB_eV*(np.log((1-cov_tot)/cov_tot) - 
-                                          np.log(1-cov_tot)/cov_tot)
-
-            elif entropy_model == '2D ideal gas':
-
-                s_conf = n_ads_tot*kB_eV*(-np.log(cov_tot))
-
-            e_form_ads_list[i] = (e_form_zero + delta_e_cov + e_bind_corr - 
-                                  temperature*s_conf)
-
-            if e_form_denom == 'N met':
-
-                e_spec_ads_list[i] = e_form_ads_list[i]/n_atoms
-            
-            elif e_form_denom == 'N met + N ads':
-            
-                e_spec_ads_list[i] = e_form_ads_list[i]/(n_atoms+n_ads_tot)
-
-    elif averag_e_bind is False:
-
-        for cn in range(n_coord_thr):
-
-            g_bind[cn] = y_zero_e_bind+m_ang_e_bind*cn-delta_mu_ads
-
-            if cn in indices_uns:
-                g_bind_uns = np.append(g_bind_uns, g_bind[cn])
-
-        i = -1
-        repeat = False
+    for site in active_sites_sel:
         
-        while i < n_atoms_top-1:
+        site.prob     = 0.
+        site.prob_i   = 0.
+        site.coverage = 0.
+        
+        site.n_coord_ave = sum(site.n_coord)/len(site.n_coord)
+        site.g_bind = g_bind_dict[site.name](site.n_coord_ave, area_surf)
+    
+    active_sites_sel = sorted(active_sites_sel, key = lambda x: x.g_bind)
+    
+    cdef:
+        int        i_ads
+        float      area_per_ads, denom
+        int        n_ads_i         = 0
+        int        n_ads           = 0
+        float      coverage        = 0.
+        int        n_points        = int(n_atoms_surf)+1
+        np.ndarray e_form_ads_vect = np.array([e_form_clean]*n_points)
+        np.ndarray e_spec_ads_vect = np.array([e_spec_clean]*n_points)
+        np.ndarray coverage_vect   = np.zeros(n_points, dtype = float)
+    
+    for i_ads in range(n_points-1):
+        
+        n_ads_i += 1
+        
+        area_per_ads = area_surf/n_ads_i
+        
+        denom = 0.
+        
+        for site in active_sites_sel:
             
-            if repeat is False:
-                i += 1
-                n_ads_tot += 1
-                n_uns_tot += 1
-
-            cov_tot = float(n_ads_tot)/n_atoms_top
-            coverage_list[i] = cov_tot
-    
-            args = (n_coord_dist_uns, g_bind_uns, n_uns_tot, temperature)
-    
-            n_ads_uns = np.array([float(n_uns_tot)/len(n_ads_uns)] * 
-                                 len(n_ads_uns))
-    
-            repeat = False
-    
-            sol = optimize.root(get_n_ads_uns, n_ads_uns, args = args)
-
-            n_ads_uns = sol.x
-
-            for j in range(n_indices_uns):
-
-                if n_ads_uns[j] >= n_coord_dist_uns[j]:
-                    
-                    n_indices_sat += 1
-                    indices_sat = np.append(indices_sat, indices_uns[j])
-                    n_coord_dist_sat = np.append(n_coord_dist_sat,
-                                                 n_coord_dist_uns[j])
-                    g_bind_sat = np.append(g_bind_sat, g_bind_uns[j])
-                    
-                    n_uns_tot -= n_coord_dist_uns[j]
-                    
-                    n_indices_uns -= 1
-                    indices_uns = np.delete(indices_uns, j)
-                    n_coord_dist_uns = np.delete(n_coord_dist_uns, j)
-                    g_bind_uns = np.delete(g_bind_uns, j)
-                    n_ads_uns = np.delete(n_ads_uns, j)
-                    
-                    repeat = True
-                    
-                    break
-
-            g_bind_ave = 0.
-            e_bind_corr = 0.
+            site.g_bind = g_bind_dict[site.name](
+                                        cn_ave       = site.n_coord_ave,
+                                        area_per_ads = area_per_ads    )
+        
+            if sites_equilib:
             
-            for j in range(n_indices_uns):
+                site.prob_i = np.exp(-site.g_bind/kB_T)*(1.-site.prob)
+        
+                denom += site.prob_i
+        
+        for i_site, site in enumerate(active_sites_sel):
+            
+            if sites_equilib:
+                site.prob_i /= denom
+                site.prob += site.prob_i
+                site.g_bind += kB_T*np.log(site.prob)
                 
-                cn = indices_uns[j]
-                cov_uns[j] = n_ads_uns[j]/n_coord_dist_uns[j]
-                e_bind_corr += n_ads_uns[j]*f_e_bind_corr[cn](cov_uns[j])
-
-                g_bind_ave += n_ads_uns[j]*g_bind_uns[j]
+            else:
+                site.prob = 1. if i_site < n_ads_i else 0.
             
-            for j in range(n_indices_sat):
-                
-                cn = indices_sat[j]
-                e_bind_corr += n_coord_dist_sat[j]*f_e_bind_corr[cn](1.)
-
-                g_bind_ave += n_coord_dist_sat[j]*g_bind_sat[j]
+            e_form_ads_vect[n_ads_i] += site.g_bind*site.prob
+        
+        e_spec_ads_vect[n_ads_i] = e_form_ads_vect[n_ads_i]/n_atoms
+    
+        coverage_vect[n_ads_i] = float(n_ads_i)/n_atoms_surf
+    
+        if e_form_ads_vect[n_ads_i] == np.min(e_form_ads_vect):
             
-            e_form_zero = e_form_clean+g_bind_ave
-            
-            if cov_tot > 0.999:
-                cov_tot = 0.999
+            n_ads      = n_ads_i
+            e_form_ads = e_form_ads_vect[n_ads_i]
+            coverage   = coverage_vect[n_ads_i]
+        
+            for site in active_sites_sel:
+                site.coverage = site.prob
     
-            if entropy_model is None:
-                
-                s_conf = 0.
-    
-            elif entropy_model == '2D lattice gas':
-
-                s_conf = n_ads_tot*kB_eV*(np.log((1-cov_tot)/cov_tot) - 
-                                          np.log(1-cov_tot)/cov_tot)
-
-            elif entropy_model == '2D ideal gas':
-
-                s_conf = n_ads_tot*kB_eV*(-np.log(cov_tot))
-
-            delta_e_cov = n_ads_tot*alpha_cov*(area_surf/n_ads_tot)**-beta_cov
-    
-            e_form_ads_list[i] = (e_form_zero + delta_e_cov + e_bind_corr - 
-                                  temperature*s_conf)
-    
-            if e_form_denom == 'N met':
-
-                e_spec_ads_list[i] = e_form_ads_list[i]/n_atoms
-            
-            elif e_form_denom == 'N met + N ads':
-            
-                e_spec_ads_list[i] = e_form_ads_list[i]/(n_atoms+n_ads_tot)
-
-    else:
-
-        e_form_zero += e_form_clean
-
-        for i in range(n_atoms_top):
-    
-            n_ads_tot += 1
-            cov_tot = float(n_ads_tot)/n_atoms_top
-            coverage_list[i] = cov_tot
-    
-            cn = n_coord_top[i]
-            n_ads[cn] += 1
-            cov[cn] = float(n_ads[cn])/n_coord_dist[cn]
-            
-            e_bind_corr = 0.
-            for n in range(n_coord_thr):
-                e_bind_corr += n_ads[n]*f_e_bind_corr[n](cov[n])
-    
-            e_bind = y_zero_e_bind+m_ang_e_bind*n_coord_top[i]
-    
-            e_form_zero += e_bind-delta_mu_ads
-    
-            if cov_tot > 0.999:
-                cov_tot = 0.999
-    
-            if entropy_model is None:
-    
-                s_conf = 0.
-    
-            elif entropy_model == '2D lattice gas':
-
-                s_conf = n_ads_tot*kB_eV*(np.log((1-cov_tot)/cov_tot) - 
-                                          np.log(1-cov_tot)/cov_tot)
-
-            elif entropy_model == '2D ideal gas':
-
-                s_conf = n_ads_tot*kB_eV*(-np.log(cov_tot))
-
-            delta_e_cov = n_ads_tot*alpha_cov*(area_surf/n_ads_tot)**-beta_cov
-    
-            e_form_ads_list[i] = (e_form_zero + delta_e_cov + e_bind_corr - 
-                                  temperature*s_conf)
-    
-            if e_form_denom == 'N met':
-
-                e_spec_ads_list[i] = e_form_ads_list[i]/n_atoms
-            
-            elif e_form_denom == 'N met + N ads':
-            
-                e_spec_ads_list[i] = e_form_ads_list[i]/(n_atoms+n_ads_tot)
-
-    e_spec_ads = np.min(e_spec_ads_list)
-    coverage   = coverage_list[np.argmin(e_spec_ads_list)]
-
-    object.e_form_ads_list = e_form_ads_list
-    object.e_spec_ads_list = e_spec_ads_list
-    object.coverage_list   = coverage_list
+    object.e_form_ads      = e_form_ads
+    object.e_spec_ads      = e_form_ads/n_atoms
+    object.e_form          = e_form_ads
+    object.e_spec          = e_form_ads/n_atoms
+    object.e_form_ads_vect = e_form_ads_vect
+    object.e_spec_ads_vect = e_spec_ads_vect
+    object.coverage_vect   = coverage_vect
+    object.n_ads           = n_ads
     object.coverage        = coverage
-    object.e_spec_ads      = e_spec_ads
-    object.e_spec          = e_spec_ads
 
-    if e_form_denom == 'N met':
-
-        object.e_form_ads = e_spec_ads*n_atoms
-        object.e_form     = e_spec_ads*n_atoms
-    
-    elif e_form_denom == 'N met + N ads':
-    
-        object.e_form_ads = e_spec_ads*(n_atoms+n_ads_tot)
-        object.e_form     = e_spec_ads*(n_atoms+n_ads_tot)
-
-    return object.e_form_ads
-
-################################################################################
-# GET N ADS UNS
-################################################################################
-
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def get_n_ads_uns(np.ndarray n_ads_uns       ,
-                  np.ndarray n_coord_dist_uns,
-                  np.ndarray g_bind_uns      ,
-                  int        n_ads_tot       ,
-                  float      temperature     ,
-                  float      epsi            = 1e+00,
-                  float      scale_factor    = 1e+04):
-    
-    cdef:
-        int        i
-        np.ndarray err = np.zeros(len(n_ads_uns))
-    
-    for i in range(len(n_ads_uns)):
-    
-        if n_ads_uns[i] > n_coord_dist_uns[i]-epsi:
-            err[i] += scale_factor*(n_ads_uns[i]-n_coord_dist_uns[i]+epsi)
-            n_ads_uns[i] = n_ads_tot-epsi
-        
-        elif n_ads_uns[i] < 0.+epsi:
-            err[i] += scale_factor*(n_ads_uns[i]-0.-epsi)
-            n_ads_uns[i] = 0.+epsi
-    
-    err[0] = np.sum(n_ads_uns)-n_ads_tot
-
-    for i in range(1, len(n_ads_uns)):
-
-        err[i] = (n_ads_uns[0]*n_coord_dist_uns[i] - 
-                  n_ads_uns[i]*n_coord_dist_uns[0] *
-                  np.exp(-(g_bind_uns[0]-g_bind_uns[i])/(kB_eV*temperature)))
-
-    return err
+    return e_form_ads
 
 ################################################################################
 # REMOVE ATOMS
@@ -1387,9 +1210,9 @@ def get_n_ads_uns(np.ndarray n_ads_uns       ,
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def particle_remove_atoms(object,
-                          int        n_iterations  ,
-                          int        remove_groups = False):
+def remove_atoms(object,
+                 int        n_iterations  ,
+                 int        remove_groups = False):
 
     cdef:
         int        i, p, q
@@ -1464,8 +1287,10 @@ def particle_remove_atoms(object,
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def particle_multiplicity(object,
-                          float      multip_bulk):
+def get_multiplicity(object,
+                     float      multip_bulk):
+
+    import spglib
 
     cdef:
         tuple      cell
@@ -1477,7 +1302,7 @@ def particle_multiplicity(object,
     
     cell = (lattice, positions, numbers)
     
-    n_symmetries = len(sp.get_symmetry(cell, symprec = 1e-3)['rotations'])
+    n_symmetries = len(spglib.get_symmetry(cell, symprec = 1e-3)['rotations'])
 
     multiplicity = multip_bulk/n_symmetries
 

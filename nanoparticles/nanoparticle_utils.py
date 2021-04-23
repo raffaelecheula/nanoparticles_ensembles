@@ -106,13 +106,13 @@ def get_neighbor_atoms(bulk, interact_len, epsi = 1e-4):
     atoms = boundary_atoms(atoms, base_boundary = True)
     atoms.translate(-sum(cell_vectors))
 
-    del atoms [[ a.index for a in atoms \
-        if np.linalg.norm(a.position) > interact_len + epsi ]]
+    del atoms [[ a.index for a in atoms
+                 if np.linalg.norm(a.position) > interact_len + epsi ]]
 
     atoms.set_cell(cell_vectors)
 
-    del atoms [[ a.index for a in atoms \
-        if np.array_equal(a.position, [0., 0., 0.]) ]]
+    del atoms [[ a.index for a in atoms
+                 if np.array_equal(a.position, [0., 0., 0.]) ]]
 
     return atoms
 
@@ -148,15 +148,18 @@ def cluster_add_adsorbates(atoms, adsorbate, sites_list, distance,
     for site_num in sites_list:
 
         site_pos = np.zeros(3)
+        
         if type(site_num) in (int, np.int64):
             if first_element == 1:
                 site_num -= 1
             site_pos += atoms[site_num].position
+        
         else:
             for num in site_num:
                 if first_element == 1:
                     num -= 1
                 site_pos += atoms[num].position/len(site_num)
+        
         direction = site_pos-center
         direction /= np.linalg.norm(direction)
         ads_center = site_pos + direction*distance
@@ -184,7 +187,10 @@ def cluster_add_adsorbates(atoms, adsorbate, sites_list, distance,
 
 def decahedron_grid(element, lattice_constant, size, heigth):
 
-    atoms = Decahedron(symbol = element, p = size, q = heigth, r = 0,
+    atoms = Decahedron(symbol          = element         ,
+                       p               = size            ,
+                       q               = heigth          ,
+                       r               = 0               ,
                        latticeconstant = lattice_constant)
 
     atoms.rotate(360./10., 'z')
@@ -201,7 +207,8 @@ def decahedron_grid(element, lattice_constant, size, heigth):
 
 def icosahedron_grid(element, lattice_constant, size):
 
-    atoms = Icosahedron(symbol = element, noshells = size,
+    atoms = Icosahedron(symbol          = element         ,
+                        noshells        = size            ,
                         latticeconstant = lattice_constant)
 
     atoms.set_pbc(True)
