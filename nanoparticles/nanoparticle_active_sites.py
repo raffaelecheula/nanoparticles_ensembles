@@ -141,7 +141,8 @@ class ActiveSite():
     
         vars_reduced = ['name'   ,
                         'n_coord',
-                        'deleted']
+                        'deleted',
+                        'tag'    ]
         
         for var in [var for var in vars_all if var not in vars_reduced]:
         
@@ -786,7 +787,7 @@ def get_active_sites(surface,
 # GET ACTIVE SITES DICT
 ################################################################################
 
-def get_active_sites_dict(active_sites, with_tags = False):
+def get_active_sites_dict(active_sites, with_tags = True):
 
     active_sites_dict = {}
 
@@ -810,21 +811,54 @@ def get_active_sites_dict(active_sites, with_tags = False):
     return active_sites_dict
 
 ################################################################################
-# REDUCE ACTIVE SITES
+# GET ACTIVE SITES DICT
 ################################################################################
 
-def reduce_active_sites(active_sites_dict):
+def get_active_sites_from_dict(active_sites_dict, with_tags = True):
 
-    active_sites_dict_reduced = {}
+    active_sites = []
+
+    for name in active_sites_dict:
+        
+        if with_tags:
+        
+            for tag in active_sites_dict[name]:
+        
+                n_coord = [int(n_coord) for n_coord in tag.split(',')]
+        
+                for i in range(active_sites_dict[name][tag]):
+        
+                    site = ActiveSite(n_coord = n_coord,
+                                      name    = name   )
+            
+                    active_sites += [site]
+
+        else:
+
+            for i in range(active_sites_dict[name]):
+        
+                site = ActiveSite(name = name)
+               
+                active_sites += [site]
+
+    return active_sites
+
+################################################################################
+# REMOVE TAGS ACTIVE SITES
+################################################################################
+
+def remove_tags_active_sites(active_sites_dict):
+
+    active_sites_dict_no_tags = {}
 
     for name in active_sites_dict:
 
         number = sum([ active_sites_dict[name][tag]
                        for tag in active_sites_dict[name] ])
 
-        active_sites_dict_reduced[name] = number
+        active_sites_dict_no_tags[name] = number
 
-    return active_sites_dict_reduced
+    return active_sites_dict_no_tags
 
 ################################################################################
 # PLOT SITES DISTRIBUTION
