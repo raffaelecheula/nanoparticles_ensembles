@@ -90,6 +90,92 @@ for i in range(len(octa_vert)):
 class ParticleShape:
 
     # ----------------------------------------------------------------------
+    #  GET N ATOMS SURF
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_n_atoms_surf(self,
+                         int        n_coord_max_surf = 10):
+
+        cdef:
+            int        n_coord
+            int        n_atoms_surf = 0
+
+        for n_coord in range(n_coord_max_surf):
+            n_atoms_surf += self.n_coord_dist[n_coord]
+
+        self.n_atoms_surf = n_atoms_surf
+
+        return n_atoms_surf
+
+    # ----------------------------------------------------------------------
+    #  GET DISPERSION
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_dispersion(self,
+                       int        n_coord_max_surf = 10):
+
+        cdef:
+            float      dispersion
+
+        self.get_n_atoms_surf(n_coord_max_surf = n_coord_max_surf)
+
+        dispersion = self.n_atoms_surf/self.n_atoms
+
+        self.dispersion = dispersion
+
+        return dispersion
+
+    # ----------------------------------------------------------------------
+    #  GET N COORD AVE
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_n_coord_ave(self):
+
+        cdef:
+            int        n_coord
+            int        n_coord_max = 12
+            float      n_coord_ave = 0.
+
+        for n_coord in range(n_coord_max+1):
+            n_coord_ave += self.n_coord_dist[n_coord]*n_coord
+
+        n_coord_ave /= self.n_atoms
+
+        return n_coord_ave
+
+    # ----------------------------------------------------------------------
+    #  GET N COORD AVE SURF
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_n_coord_ave_surf(self,
+                             int        n_coord_max_surf = 10):
+
+        cdef:
+            int        n_coord
+            float      n_coord_ave_surf = 0.
+
+        self.get_n_atoms_surf(n_coord_max_surf = n_coord_max_surf)
+
+        for n_coord in range(n_coord_max_surf):
+            n_coord_ave_surf += self.n_coord_dist[n_coord]*n_coord
+
+        n_coord_ave_surf /= self.n_atoms_surf
+
+        return n_coord_ave_surf
+
+    # ----------------------------------------------------------------------
     #  SET LATTICE CONSTANT
     # ----------------------------------------------------------------------
 
@@ -118,20 +204,24 @@ class ParticleShape:
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def reduce_data(self):
-
-        for site in self.active_sites:
-
-            site.reduce_data()
+    def reduce_data(self, only_active_sites_dict = True):
 
         vars_all = [var for var in vars(self)]
 
-        vars_reduced = ['particle_type'   ,
-                        'n_atoms'         ,
-                        'positions'       ,
-                        'n_coord_dist'    ,
-                        'lattice_constant',
-                        'active_sites'    ]
+        vars_reduced = ['particle_type'    ,
+                        'n_atoms'          ,
+                        'positions'        ,
+                        'n_coord_dist'     ,
+                        'lattice_constant' ,
+                        'active_sites_dict',
+                        'n_twin'           ]
+    
+        if only_active_sites_dict is False:
+
+            vars_reduced += ['active_sites']
+
+            for site in self.active_sites:
+                site.reduce_data()
     
         for var in [var for var in vars_all if var not in vars_reduced]:
 
@@ -191,13 +281,51 @@ class ParticleShape:
         return multiplicity
 
     # ----------------------------------------------------------------------
+    #  GET DIAMETER
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_diameter(self):
+    
+        #cdef:
+        #    int        i, j
+        #    float      diameter = 0.
+        #    #np.ndarray xyz_max  = np.zeros(3, dtype = float)
+        #    #np.ndarray xyz_min  = np.ones(3, dtype = float)*np.inf
+        #    float      dist      = 0.
+        #    float      dist_max  = 0.
+        #
+        ##for i in range(self.n_atoms):
+        ##    
+        ##    for j in range(3):
+        ##        if self.positions[i][j] > xyz_max[j]:
+        ##            xyz_max[j] = self.positions[i][j]
+        ##        if self.positions[i][j] < xyz_min[j]:
+        ##            xyz_min[j] = self.positions[i][j]
+        ##
+        ##for j in range(3):
+        ##    diameter += (xyz_max[j]-xyz_min[j])/3.
+        #
+
+        cdef:
+            float      diameter = 0.
+    
+        self.get_surface_area(bond_length = 0.)
+    
+        diameter = self.diameter
+    
+        return diameter
+
+    # ----------------------------------------------------------------------
     #  GET ENERGY
     # ----------------------------------------------------------------------
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def get_energy_clean(self):
+    def get_energy_clean(self, energy_model = 'SRB'):
 
         cdef:
             int        n_atoms      = self.n_atoms
@@ -206,13 +334,23 @@ class ParticleShape:
             np.ndarray e_relax_list = self.e_relax_list
 
         cdef:
-            int        i
-            double     e_form_clean, v_atom, e_strain
-            double     e_coh = 0.
+            int        cn
+            double     v_atom, e_strain
+            double     e_form_clean = 0.
+            double     e_coh        = 0.
 
-        for i in range(13):
-            e_coh += n_coord_dist[i]*e_coh_bulk*np.sqrt(i)/np.sqrt(12)
-            e_coh += n_coord_dist[i]*e_relax_list[i]
+        assert energy_model in ('SRB', 'BB')
+
+        if energy_model == 'SRB':
+
+            for cn in range(13):
+                e_coh += n_coord_dist[cn]*e_coh_bulk*np.sqrt(cn)/np.sqrt(12)
+                e_coh += n_coord_dist[cn]*e_relax_list[cn]
+
+        elif energy_model == 'BB':
+
+            for cn in range(13):
+                e_coh += n_coord_dist[cn]*e_coh_bulk*0.5*(1+cn/12.)
 
         if self.particle_type in ('decahedron', 'icosahedron'):
 
@@ -259,19 +397,29 @@ class ParticleShape:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     def get_energy_with_ads(self,
-                            dict       g_bind_dict   ,
-                            float      bond_length   ,
-                            float      temperature   ,
-                            int        sites_equilib = True):
+                            dict       g_bind_dict    ,
+                            dict       n_bonds_dict   = {}   ,
+                            float      alpha_cov      = 0.   ,
+                            float      beta_cov       = 0.   ,
+                            float      delta_mu_ads   = 0.   ,
+                            float      bond_length    = 0.   ,
+                            float      temperature    = 0.   ,
+                            int        sites_equilib  = False,
+                            int        single_cov_fun = True ):
 
         cdef:
             float      e_form_ads
 
         e_form_ads = get_energy_with_ads(self,
-                                         g_bind_dict   = g_bind_dict  ,
-                                         bond_length   = bond_length  ,
-                                         temperature   = temperature  ,
-                                         sites_equilib = sites_equilib)
+                                         g_bind_dict    = g_bind_dict   ,
+                                         n_bonds_dict   = n_bonds_dict  ,
+                                         alpha_cov      = alpha_cov     ,
+                                         beta_cov       = beta_cov      ,
+                                         delta_mu_ads   = delta_mu_ads  ,
+                                         bond_length    = bond_length   ,
+                                         temperature    = temperature   ,
+                                         sites_equilib  = sites_equilib ,
+                                         single_cov_fun = single_cov_fun)
 
         return e_form_ads
 
@@ -331,6 +479,52 @@ class ParticleShape:
 
         return active_sites_dict
 
+    # ----------------------------------------------------------------------
+    #  GET ACTIVE SITES FROM DICT
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_active_sites_from_dict(self,
+                                   int        with_tags  = True):
+
+        from nanoparticle_active_sites import get_active_sites_from_dict
+
+        cdef:
+            list       active_sites
+
+        active_sites = get_active_sites_from_dict(
+                                active_sites_dict = self.active_sites_dict,
+                                with_tags         = with_tags             )
+
+        self.active_sites = active_sites
+
+        return active_sites
+
+    # ----------------------------------------------------------------------
+    #  PLOT ACTIVE SITES
+    # ----------------------------------------------------------------------
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def plot_active_sites_grid(self,
+                              str        plot_type        = '3D' ,
+                              int        specify_n_coord  = True ,
+                              int        specify_supp_int = False,
+                              int        specify_facets   = False,
+                              int        half_plot        = False):
+
+        from nanoparticle_active_sites import plot_active_sites_grid
+
+        plot_active_sites_grid(active_sites     = self.active_sites,
+                               plot_type        = plot_type        ,
+                               specify_n_coord  = specify_n_coord  ,
+                               specify_supp_int = specify_supp_int ,
+                               specify_facets   = specify_facets   ,
+                               half_plot        = half_plot        )
+
 ################################################################################
 # FCC PARTICLE SHAPE
 ################################################################################
@@ -344,15 +538,15 @@ class FccParticleShape(ParticleShape):
                  np.ndarray translation     ,
                  np.ndarray miller_indices  ,
                  np.ndarray planes_distances,
-                 np.ndarray e_relax_list    ,
                  float      lattice_constant,
-                 float      scale_one       , 
-                 float      scale_two       , 
-                 int        n_coord_min     ,
-                 float      interact_len    , 
-                 float      e_coh_bulk      ,
-                 int        miller_symmetry ,
-                 list       active_sites    = []):
+                 float      interact_len    ,
+                 int        n_coord_min     = 0           ,
+                 float      scale_one       = 1.0         ,
+                 float      scale_two       = 1.0         ,
+                 int        miller_symmetry = True        ,
+                 float      e_coh_bulk      = 0.          ,
+                 np.ndarray e_relax_list    = np.zeros(13),
+                 list       active_sites    = []          ):
 
         self.particle_type    = 'fcc particle'
         self.positions        = positions
@@ -396,7 +590,6 @@ class FccParticleShape(ParticleShape):
         cdef:
             int        i, j, p, q
             list       del_indices
-            int        max_coord     = 12
             np.ndarray abs_pos       = np.empty((len(positions), 3))
             np.ndarray miller_vector = np.empty(3)
             np.ndarray index_vector  = np.empty(3)
@@ -510,7 +703,6 @@ class FccParticleShape(ParticleShape):
             positions[p] += cell_trans
 
         cdef:
-            float      dispersion
             int        n_atoms      = len(positions)
             np.ndarray n_coord      = np.zeros(n_atoms, dtype = int)
             np.ndarray n_coord_dist = np.zeros(13, dtype = int)
@@ -547,15 +739,12 @@ class FccParticleShape(ParticleShape):
         for i in range(len(bincount)):
             n_coord_dist[i] = bincount[i]
 
-        dispersion = np.sum(n_coord_dist[:10])/n_atoms
-
         self.n_atoms      = n_atoms
         self.positions    = positions
         self.neighbors    = neighbors
         self.indices      = indices
         self.n_coord      = n_coord
         self.n_coord_dist = n_coord_dist
-        self.dispersion   = dispersion
 
         return positions
 
@@ -572,14 +761,14 @@ class DecahedronShape(ParticleShape):
                  np.ndarray layers_max      ,
                  np.ndarray planes_miller   ,
                  int        layers_hole     ,
-                 np.ndarray e_relax_list    ,
                  float      lattice_constant,
-                 int        n_coord_min     ,
-                 float      e_coh_bulk      ,
-                 float      e_twin          ,
-                 float      shear_modulus   ,
-                 float      k_strain        ,
-                 list       active_sites    = []):
+                 int        n_coord_min     = 0           ,
+                 float      e_coh_bulk      = 0.          ,
+                 np.ndarray e_relax_list    = np.zeros(13),
+                 float      e_twin          = 0.          ,
+                 float      shear_modulus   = 0.          ,
+                 float      k_strain        = 0.          ,
+                 list       active_sites    = []          ):
 
         self.particle_type    = 'decahedron'
         self.positions        = positions
@@ -721,7 +910,6 @@ class DecahedronShape(ParticleShape):
                 positions[p][:2] = np.dot(positions[p][:2], deca_rot_mat)
 
         cdef:
-            float      dispersion
             int        n_atoms      = len(positions)
             np.ndarray n_coord      = np.zeros(n_atoms, dtype = int)
             np.ndarray n_coord_dist = np.zeros(13, dtype = int)
@@ -761,15 +949,12 @@ class DecahedronShape(ParticleShape):
         for i in range(len(bincount)):
             n_coord_dist[i] = bincount[i]
 
-        dispersion = np.sum(n_coord_dist[:10])/n_atoms
-
         self.n_atoms      = n_atoms
         self.positions    = positions
         self.neighbors    = neighbors
         self.indices      = indices
         self.n_coord      = n_coord
         self.n_coord_dist = n_coord_dist
-        self.dispersion   = dispersion
 
         self.get_n_twin()
 
@@ -810,18 +995,18 @@ class DecahedronShape(ParticleShape):
 class IcosahedronShape(ParticleShape):
 
     def __init__(self,
-                 np.ndarray positions       ,
-                 np.ndarray neighbors       ,
-                 np.ndarray layers          ,
-                 np.ndarray e_relax_list    ,
-                 float      lattice_constant,
-                 int        n_coord_min     ,
-                 int        n_coord_min_iter,
-                 float      e_coh_bulk      ,
-                 float      e_twin          ,
-                 float      shear_modulus   ,
-                 float      k_strain        ,
-                 list       active_sites    = []):
+                 np.ndarray positions        ,
+                 np.ndarray neighbors        ,
+                 np.ndarray layers           ,
+                 float      lattice_constant ,
+                 int        n_coord_min      = 0           ,
+                 int        n_coord_min_iter = 0           ,
+                 float      e_coh_bulk       = 0.          ,
+                 np.ndarray e_relax_list     = np.zeros(13),
+                 float      e_twin           = 0.          ,
+                 float      shear_modulus    = 0.          ,
+                 float      k_strain         = 0.          ,
+                 list       active_sites     = []          ):
 
         self.particle_type    = 'icosahedron'
         self.positions        = positions
@@ -895,7 +1080,6 @@ class IcosahedronShape(ParticleShape):
             indices   = np.delete(indices, del_indices, axis = 0)
 
         cdef:
-            float      dispersion
             int        iteration
             float      distance_max, distance_min, dis
             int        n_atoms      = len(positions)
@@ -945,15 +1129,12 @@ class IcosahedronShape(ParticleShape):
         for i in range(len(bincount)):
             n_coord_dist[i] = bincount[i]
 
-        dispersion = np.sum(n_coord_dist[:10])/n_atoms
-
         self.n_atoms      = n_atoms
         self.positions    = positions
         self.neighbors    = neighbors
         self.indices      = indices
         self.n_coord      = n_coord
         self.n_coord_dist = n_coord_dist
-        self.dispersion   = dispersion
 
         self.get_n_twin()
 
@@ -998,14 +1179,14 @@ def calculate_neighbors(np.ndarray positions   ,
         int        i, j, k, p, q, c
         list       box_num
         float      distance
-        np.ndarray cell_diag = sum(cell)
-        int        n_atoms   = len(positions)
-        int        n_max     = 108
-        int        max_coord = 12
-        np.ndarray dist_vect = np.zeros(3, dtype = float)
-        np.ndarray box_len   = np.zeros(3, dtype = float)
-        np.ndarray neighbors = np.zeros((n_atoms, max_coord), dtype = int)
-        np.ndarray n_coord   = np.zeros(n_atoms, dtype = int)
+        np.ndarray cell_diag   = sum(cell)
+        int        n_atoms     = len(positions)
+        int        n_max       = 108
+        int        n_coord_max = 12
+        np.ndarray dist_vect   = np.zeros(3, dtype = float)
+        np.ndarray box_len     = np.zeros(3, dtype = float)
+        np.ndarray neighbors   = np.zeros((n_atoms, n_coord_max), dtype = int)
+        np.ndarray n_coord     = np.zeros(n_atoms, dtype = int)
 
     box_num = [int(np.ceil(cell_diag[0]/interact_len)),
                int(np.ceil(cell_diag[1]/interact_len)),
@@ -1037,7 +1218,7 @@ def calculate_neighbors(np.ndarray positions   ,
                         i_count[ii,jj,kk] += 1
 
     for i in range(n_atoms):
-        for j in range(max_coord):
+        for j in range(n_coord_max):
             neighbors[i,j] = -1
 
     for p in range(n_atoms):
@@ -1065,7 +1246,7 @@ def calculate_neighbors(np.ndarray positions   ,
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def get_surface_area(object,
-                     float      bond_length):
+                     float      bond_length = 0.):
 
     from scipy.spatial import ConvexHull
 
@@ -1076,23 +1257,33 @@ def get_surface_area(object,
 
     cdef:
         float      area_surf
+        float      diameter
 
-    for i in range(len(positions)):
-        center += positions[i]/len(positions)
-
-    for i in range(len(positions)):
-    
-        direction = positions[i]-center
-    
-        if np.linalg.norm(direction) > 1e-4:
-            direction /= np.linalg.norm(direction)
-            positions[i] += direction*bond_length
+    #if bond_length > 0.:
+    #
+    #    for i in range(len(positions)):
+    #        center += positions[i]/len(positions)
+    #
+    #    for i in range(len(positions)):
+    #    
+    #        direction = positions[i]-center
+    #    
+    #        if np.linalg.norm(direction) > 1e-4:
+    #            
+    #            direction /= np.linalg.norm(direction)
+    #            
+    #            positions[i] += direction*bond_length
 
     hull = ConvexHull(positions)
 
     area_surf = hull.area
+    diameter  = (6./np.pi*hull.volume)**(1./3.)
+
+    if bond_length > 0.:
+        area_surf += np.pi*((diameter+2.*bond_length)**2-diameter**2)
 
     object.area_surf = area_surf
+    object.diameter  = diameter
 
     return area_surf
 
@@ -1104,10 +1295,15 @@ def get_surface_area(object,
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def get_energy_with_ads(object,
-                        dict       g_bind_dict   ,
-                        float      bond_length   ,
-                        float      temperature   ,
-                        int        sites_equilib = True):
+                        dict       g_bind_dict    ,
+                        dict       n_bonds_dict   = {}   ,
+                        float      alpha_cov      = 0.   ,
+                        float      beta_cov       = 0.   ,
+                        float      delta_mu_ads   = 0.   ,
+                        float      bond_length    = 0.   ,
+                        float      temperature    = 0.   ,
+                        int        sites_equilib  = False,
+                        int        single_cov_fun = True ):
 
     cdef:
         float      area_surf
@@ -1116,9 +1312,15 @@ def get_energy_with_ads(object,
         float      e_form_clean     = object.e_form_clean
         float      e_spec_clean     = object.e_spec_clean
         int        n_atoms          = object.n_atoms
-        int        n_atoms_surf     = sum(object.n_coord_dist[:10])
+        int        n_atoms_surf     = object.get_n_atoms_surf()
 
-    area_surf = object.get_surface_area(bond_length = bond_length)
+    if 'area_surf' not in dir(object) or bond_length != 0.:
+        area_surf = object.get_surface_area(bond_length = bond_length)
+    else:
+        area_surf = object.area_surf
+
+    if len(object.active_sites) == 0:
+        object.get_active_sites()
 
     for site in object.active_sites:
         if site.name in g_bind_dict:
@@ -1130,8 +1332,21 @@ def get_energy_with_ads(object,
         site.prob_i   = 0.
         site.coverage = 0.
         
+        if site.name in n_bonds_dict:
+            if len(site.n_coord) != n_bonds_dict[site.name]:
+                site.n_coord = site.n_coord[:n_bonds_dict[site.name]]
+        
         site.n_coord_ave = sum(site.n_coord)/len(site.n_coord)
-        site.g_bind = g_bind_dict[site.name](site.n_coord_ave, area_surf)
+        
+        if single_cov_fun:
+        
+            site.g_bind = g_bind_dict[site.name](cn_ave = site.n_coord_ave)
+        
+        else:
+        
+            site.g_bind = g_bind_dict[site.name](
+                                        cn_ave       = site.n_coord_ave,
+                                        area_per_ads = area_surf       )
     
     active_sites_sel = sorted(active_sites_sel, key = lambda x: x.g_bind)
     
@@ -1142,54 +1357,93 @@ def get_energy_with_ads(object,
         int        n_ads           = 0
         float      coverage        = 0.
         int        n_points        = int(n_atoms_surf)+1
+        float      e_form_ads_zero = e_form_clean+0.
         np.ndarray e_form_ads_vect = np.array([e_form_clean]*n_points)
         np.ndarray e_spec_ads_vect = np.array([e_spec_clean]*n_points)
         np.ndarray coverage_vect   = np.zeros(n_points, dtype = float)
     
-    for i_ads in range(n_points-1):
-        
-        n_ads_i += 1
-        
-        area_per_ads = area_surf/n_ads_i
-        
-        denom = 0.
-        
-        for site in active_sites_sel:
-            
-            site.g_bind = g_bind_dict[site.name](
-                                        cn_ave       = site.n_coord_ave,
-                                        area_per_ads = area_per_ads    )
-        
-            if sites_equilib:
-            
-                site.prob_i = np.exp(-site.g_bind/kB_T)*(1.-site.prob)
-        
-                denom += site.prob_i
-        
-        for i_site, site in enumerate(active_sites_sel):
-            
-            if sites_equilib:
-                site.prob_i /= denom
-                site.prob += site.prob_i
-                site.g_bind += kB_T*np.log(site.prob)
-                
-            else:
-                site.prob = 1. if i_site < n_ads_i else 0.
-            
-            e_form_ads_vect[n_ads_i] += site.g_bind*site.prob
-        
-        e_spec_ads_vect[n_ads_i] = e_form_ads_vect[n_ads_i]/n_atoms
+    if not single_cov_fun or sites_equilib:
     
-        coverage_vect[n_ads_i] = float(n_ads_i)/n_atoms_surf
-    
-        if e_form_ads_vect[n_ads_i] == np.min(e_form_ads_vect):
+        for i_ads in range(n_points-1):
             
-            n_ads      = n_ads_i
-            e_form_ads = e_form_ads_vect[n_ads_i]
-            coverage   = coverage_vect[n_ads_i]
-        
+            n_ads_i += 1
+            
+            area_per_ads = area_surf/n_ads_i
+            
+            denom = 0.
+            
             for site in active_sites_sel:
-                site.coverage = site.prob
+                
+                if not single_cov_fun:
+                    
+                    site.g_bind = g_bind_dict[site.name](
+                                            cn_ave       = site.n_coord_ave,
+                                            area_per_ads = area_per_ads    )
+            
+                if sites_equilib:
+                
+                    site.prob_i = np.exp(-site.g_bind/kB_T)*(1.-site.prob)
+                
+                    denom += site.prob_i
+            
+            for i_site, site in enumerate(active_sites_sel):
+                
+                if sites_equilib:
+                    
+                    site.prob_i /= denom
+                    site.prob += site.prob_i
+                    
+                    e_form_ads_vect[n_ads_i] += (site.g_bind + 
+                                            kB_T*np.log(site.prob))*site.prob
+                    
+                else:
+                    
+                    if i_site == n_ads_i:
+                        break
+                    
+                    site.prob = 1. if i_site < n_ads_i else 0.
+                    
+                    e_form_ads_vect[n_ads_i] += site.g_bind*site.prob
+            
+            e_form_ads_vect[n_ads_i] -= n_ads_i*delta_mu_ads
+            
+            if single_cov_fun:
+                e_form_ads_vect[n_ads_i] += (n_ads_i *
+                                            alpha_cov*(area_per_ads)**-beta_cov)
+            
+            e_spec_ads_vect[n_ads_i] = e_form_ads_vect[n_ads_i]/n_atoms
+        
+            coverage_vect[n_ads_i] = float(n_ads_i)/n_atoms_surf
+        
+            if e_form_ads_vect[n_ads_i] == np.min(e_form_ads_vect):
+                
+                n_ads      = n_ads_i
+                e_form_ads = e_form_ads_vect[n_ads_i]
+                coverage   = coverage_vect[n_ads_i]
+            
+                for site in active_sites_sel:
+                    site.coverage = site.prob
+    
+    else:
+    
+        for i_ads in range(n_points-1):
+            
+            n_ads_i += 1
+            
+            area_per_ads = area_surf/n_ads_i
+            
+            e_form_ads_zero += active_sites_sel[i_ads].g_bind-delta_mu_ads
+            
+            e_form_ads_vect[n_ads_i] = (e_form_ads_zero+n_ads_i *
+                                        alpha_cov*(area_per_ads)**-beta_cov)
+            
+            e_spec_ads_vect[n_ads_i] = e_form_ads_vect[n_ads_i]/n_atoms
+        
+            coverage_vect[n_ads_i] = float(n_ads_i)/n_atoms_surf
+        
+        n_ads      = np.argmin(e_form_ads_vect)
+        e_form_ads = e_form_ads_vect[n_ads]
+        coverage   = coverage_vect[n_ads]
     
     object.e_form_ads      = e_form_ads
     object.e_spec_ads      = e_form_ads/n_atoms
@@ -1268,15 +1522,12 @@ def remove_atoms(object,
     for i in range(len(bincount)):
         n_coord_dist[i] = bincount[i]
 
-    dispersion = np.sum(n_coord_dist[:10])/n_atoms
-
     object.n_atoms      = n_atoms
     object.positions    = positions
     object.neighbors    = neighbors
     object.indices      = indices
     object.n_coord      = n_coord
     object.n_coord_dist = n_coord_dist
-    object.dispersion   = dispersion
 
     return positions
 
