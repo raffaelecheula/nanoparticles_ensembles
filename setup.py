@@ -14,7 +14,7 @@ setuptools.setup(
     author="Raffaele Cheula",
     author_email="cheula.raffaele@gmail.com",
 
-    description="General purpose tools for high-throughput catalysis.",
+    description="Produce ensembles of particles, obtain 3D grid of active sites, calculate probabilities of metastable particles.",
     long_description=readme,
     license='GPL-3.0',
 
