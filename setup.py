@@ -1,4 +1,6 @@
 import setuptools
+import numpy
+from Cython.Build import cythonize
 
 with open('requirements.txt', 'r') as f:
     requirements = f.readlines()
@@ -26,6 +28,10 @@ setuptools.setup(
     },
     install_requires=requirements,
     python_requires='>=3.5, <4',
+
+    ext_modules=cythonize("nanoparticles/*.pyx"),
+    
+    include_dirs=[numpy.get_include()],
 
     classifiers=[
         'Development Status :: 3 - Alpha',
