@@ -10,10 +10,12 @@
 ################################################################################
 
 # PYTHON IMPORT
+
 from __future__ import absolute_import, division, print_function
 import numpy as np
 
 # CYTHON IMPORT
+
 cimport cython
 cimport numpy as np
 from libc.math cimport exp, sqrt, pow

@@ -13,6 +13,7 @@ from __future__ import absolute_import, division, print_function
 import copy as cp
 import numpy as np
 from math import pi, atan, sqrt
+from ase import Atoms
 from ase.cluster.decahedron import Decahedron
 from ase.cluster.icosahedron import Icosahedron
 
