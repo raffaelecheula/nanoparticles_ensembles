@@ -14,8 +14,10 @@ A Python/Cython library useful to:
 * Cython
 
 ## **Installation:**
+```console
 cd nanoparticles
 pip install -e .
+```
 
 ## Authors:
 * Raffaele Cheula (raffaele.cheula@polimi.it)
