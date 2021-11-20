@@ -99,6 +99,7 @@ def g_bind_fun_hcp(cn_ave): return (-2.8899-dmu_CO)+(+0.098000)*cn_ave
 def g_bind_fun_fcc(cn_ave): return (-2.8899-dmu_CO)+(+0.098000)*cn_ave
 def g_bind_fun_hol(cn_ave): return (-1.8210-dmu_CO)+(-0.030000)*cn_ave
 def g_bind_fun_hol(cn_ave): return (-1.8210-dmu_CO)+(-0.030000)*cn_ave
+def g_bind_fun_lbr(cn_ave): return (-1.5210-dmu_CO)+(-0.030000)*cn_ave
 
 g_bind_dict['top'] = g_bind_fun_top
 g_bind_dict['brg'] = g_bind_fun_brg
@@ -190,7 +191,9 @@ print('\n')
 print('Formation energy = {0:.4f} eV = {1:.4f} eV/atom\n'.format(
       particle.e_form_clean, particle.e_spec_clean))
 
-print('number of atoms in twin boundaries = {}\n'.format(particle.n_twin))
+print('Diameter = {0:+10.4f} A'.format(particle.get_diameter()))
+
+print('Number of atoms in twin boundaries = {}\n'.format(particle.n_twin))
 
 ################################################################################
 # GET ENERGY WITH ADSORBATES
@@ -228,7 +231,7 @@ if adsorption is True:
         particle.e_spec_ads-particle.e_spec_clean))
 
 ################################################################################
-# ADD ADSORBATES
+# PLOT ENERGY
 ################################################################################
 
 plot_energy = False
@@ -304,7 +307,7 @@ if add_adsorbates is True:
     sites_list = top_list[:n_ads]
     
     coverage = len(sites_list)/len(top_list)
-    print('nanoparticle coverage = {:.2f} ML\n'.format(coverage))
+    print('Nanoparticle coverage = {:.2f} ML\n'.format(coverage))
     
     atoms = cluster_add_adsorbates(atoms      = atoms      ,
                                    adsorbate  = CO         ,

@@ -100,6 +100,7 @@ def g_bind_fun_hcp(cn_ave): return (-2.8899-dmu_CO)+(+0.098000)*cn_ave
 def g_bind_fun_fcc(cn_ave): return (-2.8899-dmu_CO)+(+0.098000)*cn_ave
 def g_bind_fun_hol(cn_ave): return (-1.8210-dmu_CO)+(-0.030000)*cn_ave
 def g_bind_fun_hol(cn_ave): return (-1.8210-dmu_CO)+(-0.030000)*cn_ave
+def g_bind_fun_lbr(cn_ave): return (-1.5210-dmu_CO)+(-0.030000)*cn_ave
 
 g_bind_dict['top'] = g_bind_fun_top
 g_bind_dict['brg'] = g_bind_fun_brg
@@ -250,7 +251,7 @@ atoms = particle.to_ase_atoms(symbol = element)
 
 atoms.write('pw.xsf')
 
-atoms.edit()
+#atoms.edit()
 
 ################################################################################
 # PRINT COORDINATION NUMBERS AND FORMATION ENERGY
@@ -311,7 +312,7 @@ if adsorption is True:
         particle.e_spec_ads-particle.e_spec_clean))
 
 ################################################################################
-# ADD ADSORBATES
+# PLOT ENERGY
 ################################################################################
 
 plot_energy = False
@@ -387,7 +388,7 @@ if add_adsorbates is True:
     sites_list = top_list[:n_ads]
     
     coverage = len(sites_list)/len(top_list)
-    print('nanoparticle coverage = {:.2f} ML\n'.format(coverage))
+    print('Nanoparticle coverage = {:.2f} ML\n'.format(coverage))
     
     atoms = cluster_add_adsorbates(atoms      = atoms      ,
                                    adsorbate  = CO         ,
