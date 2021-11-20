@@ -14,10 +14,8 @@ A Python/Cython library useful to:
 * Cython
 
 ## **Installation:**
-#+BEGIN_SRC sh
 cd nanoparticles
 pip install -e .
-#+END_SRC
 
 ## Authors:
 * Raffaele Cheula (raffaele.cheula@polimi.it)
