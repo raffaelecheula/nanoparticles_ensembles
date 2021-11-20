@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 
 ################################################################################
-# Raffaele Cheula, LCCP, Politecnico di Milano, raffaele.cheula@polimi.it
+# Raffaele Cheula*[a][b], Matteo Maestri**[a], Giannis Mpourmpakis***[b]
+# [a] Politecnico di Milano, [b] University of Pittsburgh
+# * raffaele.cheula@polimi.it
+# ** matteo.maestri@polimi.it
+# *** gmpourmp@pitt.edu
+# Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles 
+# Under Reaction Conditions
+# ACS Catalysis 2020, 10, 11, 6149–6158
 ################################################################################
 
 from __future__ import absolute_import, division, print_function
-from nanoparticle_units import *
-import os, io, timeit
-import numpy as np
+from nanoparticles.nanoparticle_units import *
+import os
+import timeit
 import pickle
-import matplotlib.pyplot as plt
-from nanoparticle_utils import e_relax_from_bond_ols, cluster_add_adsorbates
 
 ################################################################################
 # MEASURE TIME START

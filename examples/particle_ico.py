@@ -12,18 +12,17 @@
 ################################################################################
 
 from __future__ import absolute_import, division, print_function
-import os, timeit, random
+import timeit
+import random
 import pickle
 import numpy as np
-import copy as cp
 import matplotlib.pyplot as plt
 from ase import Atoms
-from ase.build import bulk
-from nanoparticle_units import *
-from nanoparticle_cython import calculate_neighbors, IcosahedronShape
-from nanoparticle_utils import (icosahedron_grid      ,
-                                e_relax_from_bond_ols ,
-                                cluster_add_adsorbates)
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_cython import (calculate_neighbors,
+                                               IcosahedronShape)
+from nanoparticles.nanoparticle_utils import (icosahedron_grid,
+                                              cluster_add_adsorbates)
 
 ################################################################################
 # MEASURE TIME START

@@ -12,19 +12,17 @@
 ################################################################################
 
 from __future__ import absolute_import, division, print_function
-import os, sys, timeit, random
-import pickle
+import timeit
+import random
 import numpy as np
-import copy as cp
 import matplotlib.pyplot as plt
 from collections import OrderedDict
-from itertools import permutations, product
 from ase import Atoms
 from ase.build import bulk
-from nanoparticle_units import *
-from nanoparticle_cython import calculate_neighbors, FccParticleShape
-from nanoparticle_utils import (e_relax_from_bond_ols ,
-                                cluster_add_adsorbates)
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_cython import (calculate_neighbors, 
+                                               FccParticleShape)
+from nanoparticles.nanoparticle_utils import cluster_add_adsorbates
 
 ################################################################################
 # MEASURE TIME START

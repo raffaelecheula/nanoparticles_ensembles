@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
 
 ################################################################################
-# Raffaele Cheula, LCCP, Politecnico di Milano, raffaele.cheula@polimi.it
+# Raffaele Cheula*[a][b], Matteo Maestri**[a], Giannis Mpourmpakis***[b]
+# [a] Politecnico di Milano, [b] University of Pittsburgh
+# * raffaele.cheula@polimi.it
+# ** matteo.maestri@polimi.it
+# *** gmpourmp@pitt.edu
+# Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles 
+# Under Reaction Conditions
+# ACS Catalysis 2020, 10, 11, 6149–6158
 ################################################################################
 
 from __future__ import absolute_import, division, print_function
-import os, sys, time, timeit
+import os
+import sys
+import time
+import timeit
 import pickle
 import numpy as np
 import multiprocessing as mp
-from collections import OrderedDict
-from ase.build import bulk
-from nanoparticle_units import *
-from nanoparticle_utils import decahedron_grid, e_relax_from_bond_ols
-from nanoparticle_cython import calculate_neighbors, DecahedronShape
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_utils import decahedron_grid
+from nanoparticles.nanoparticle_cython import (calculate_neighbors, 
+                                               DecahedronShape)
 
 ################################################################################
 # RUN

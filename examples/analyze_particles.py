@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 
 ################################################################################
-# Raffaele Cheula, LCCP, Politecnico di Milano, raffaele.cheula@polimi.it
+# Raffaele Cheula*[a][b], Matteo Maestri**[a], Giannis Mpourmpakis***[b]
+# [a] Politecnico di Milano, [b] University of Pittsburgh
+# * raffaele.cheula@polimi.it
+# ** matteo.maestri@polimi.it
+# *** gmpourmp@pitt.edu
+# Modeling Morphology and Catalytic Activity of Nanoparticle Ensembles 
+# Under Reaction Conditions
+# ACS Catalysis 2020, 10, 11, 6149–6158
 ################################################################################
 
 from __future__ import absolute_import, division, print_function
-import os, io, timeit
+import os
+import timeit
 import numpy as np
 import pickle
 import matplotlib.pyplot as plt
-from scipy import signal
 from scipy.optimize import curve_fit
-from nanoparticle_units import *
-from nanoparticle_utils import e_relax_from_bond_ols, cluster_add_adsorbates
-from nanoparticle_active_sites import all_sites_names, remove_tags_active_sites
+from nanoparticles.nanoparticle_units import *
+from nanoparticles.nanoparticle_active_sites import (all_sites_names,
+                                                     remove_tags_active_sites)
 
 ################################################################################
 # MEASURE TIME START
@@ -64,7 +71,6 @@ n_max_per_group      = None
 calc_energy_clean    = True
 count_active_sites   = False
 calc_energy_with_ads = False # True
-check_e_thr          = False
 fit_e_form_min       = True
 plot_e_form_n_atoms  = True
 analyze_data         = True # False
@@ -269,18 +275,6 @@ for bulk_type in bulk_types:
                                              temperature    = temperature   ,
                                              sites_equilib  = sites_equilib ,
                                              single_cov_fun = single_cov_fun)
-
-        if check_e_thr is True:
-
-            for i_p in reversed(range(len(particles))):
-
-                n_atoms = particles[i_p].n_atoms
-                e_spec  = particles[i_p].e_spec
-
-                e_thr = -e_coh_bulk*a_thr*n_atoms**(-1./3.)-b_thr
-
-                if e_spec > e_thr:
-                    del particles[i_p]
 
         particles = sorted(particles, key = lambda x: x.e_spec)
 
