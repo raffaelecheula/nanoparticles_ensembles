@@ -14,7 +14,10 @@ A Python/Cython library useful to:
 * Cython
 
 ## **Installation:**
-To compile the Cython code, navigate to the folder `nanoparticles` and type in a terminal: `bash cython_cmd`
+#+BEGIN_SRC sh
+cd nanoparticles
+pip install -e .
+#+END_SRC
 
 ## Authors:
 * Raffaele Cheula (raffaele.cheula@polimi.it)
