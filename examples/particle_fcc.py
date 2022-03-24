@@ -16,7 +16,6 @@ import timeit
 import random
 import numpy as np
 import matplotlib.pyplot as plt
-from collections import OrderedDict
 from ase import Atoms
 from ase.build import bulk
 from nanoparticles.nanoparticle_units import *
@@ -144,7 +143,7 @@ neighbors = calculate_neighbors(positions    = positions   ,
 # CALCULATION PARAMETERS
 ################################################################################
 
-step_dict = OrderedDict()
+step_dict = {}
 
 step_dict[(1,0,0)] = 1/1 # 1/1
 step_dict[(1,1,0)] = 1/1 # 1/1
@@ -155,7 +154,7 @@ step_dict[(3,1,0)] = 1/1 # 1/3
 step_dict[(3,1,1)] = 1/1 # 1/3
 step_dict[(3,2,1)] = 1/1 # 1/3
 
-layers_dict = OrderedDict()
+layers_dict = {}
 
 layers_dict[(1,0,0)] = 0
 layers_dict[(1,1,0)] = 4
@@ -189,7 +188,7 @@ d_max_dict = {}
 d_min_dict = {}
 i_max_dict = {}
 
-d_dict_all = OrderedDict()
+d_dict_all = {}
 
 d_100 = plane_dist_100 * layers_max_100
 

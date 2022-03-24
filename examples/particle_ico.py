@@ -14,7 +14,6 @@
 from __future__ import absolute_import, division, print_function
 import timeit
 import random
-import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from ase import Atoms
